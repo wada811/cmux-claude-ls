@@ -1,0 +1,14 @@
+{
+ "cleared": false,
+ "pane_ref": "pane:1",
+ "restore_record": {
+  "checkpoint_id": "00000000-0000-4000-8000-000000000010",
+  "kind": "claude",
+  "mode": "resume",
+  "launch_command": {
+   "working_directory": "/Users/me/work/restore-10",
+   "executable_path": "claude",
+   "arguments": []
+  }
+ }
+}

@@ -1,0 +1,2 @@
+{"type": "user", "timestamp": "2026-10-10T10:00:00Z", "sessionId": "x", "isSidechain": false, "message": {"role": "user", "content": "go"}}
+{"type": "assistant", "timestamp": "2026-10-10T10:30:00Z", "sessionId": "x", "isSidechain": false, "message": {"role": "assistant", "content": [{"type": "text", "text": "done?"}]}}

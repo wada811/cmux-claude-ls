@@ -1,0 +1,1 @@
+cmux-list-claude-sessions: warning: could not read pid and sessionId from any of the 2 file(s) in ~/.claude/sessions; STATE may be wrong (the Claude Code file format may have changed)

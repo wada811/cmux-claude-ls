@@ -1,0 +1,42 @@
+[
+ {
+  "surface_ref": "surface:3",
+  "waiting_for": {
+   "kind": "unknown"
+  }
+ },
+ {
+  "surface_ref": "surface:2",
+  "waiting_for": {
+   "kind": "question",
+   "questions": [
+    {
+     "question": "Which layout should the notes use?",
+     "header": "Layout",
+     "options": [
+      "Flat",
+      "Nested"
+     ],
+     "multi_select": false
+    },
+    {
+     "question": "Keep old files?",
+     "header": "Cleanup",
+     "options": [
+      "Yes",
+      "No"
+     ],
+     "multi_select": true
+    }
+   ]
+  }
+ },
+ {
+  "surface_ref": "surface:4",
+  "waiting_for": {
+   "kind": "permission",
+   "tool": "Bash",
+   "input": "./migrate.sh --apply --force"
+  }
+ }
+]

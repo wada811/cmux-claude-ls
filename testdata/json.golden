@@ -1,0 +1,165 @@
+[
+ {
+  "window_ref": "window:1",
+  "workspace_ref": "workspace:1",
+  "workspace_title": "alpha",
+  "surface_ref": "surface:1",
+  "surface_title": "build the importer",
+  "state": "busy",
+  "waiting_for": null,
+  "updated": 1791633570,
+  "age": 30,
+  "cwd": "/Users/me/work/importer",
+  "session_id": "00000000-0000-4000-8000-000000000001",
+  "pid": 4001,
+  "transcript_path": "testdata/home/.claude/projects/-Users-me-work/00000000-0000-4000-8000-000000000001.jsonl"
+ },
+ {
+  "window_ref": "window:1",
+  "workspace_ref": "workspace:1",
+  "workspace_title": "alpha",
+  "surface_ref": "surface:2",
+  "surface_title": "調査: 構成の見直し",
+  "state": "waiting",
+  "waiting_for": {
+   "kind": "question",
+   "questions": [
+    {
+     "question": "Which layout should the notes use?",
+     "header": "Layout",
+     "options": [
+      "Flat",
+      "Nested"
+     ],
+     "multi_select": false
+    },
+    {
+     "question": "Keep old files?",
+     "header": "Cleanup",
+     "options": [
+      "Yes",
+      "No"
+     ],
+     "multi_select": true
+    }
+   ]
+  },
+  "updated": 1791622800,
+  "age": 10800,
+  "cwd": "/Users/me/work/notes",
+  "session_id": "00000000-0000-4000-8000-000000000002",
+  "pid": 4002,
+  "transcript_path": "testdata/home/.claude/projects/-Users-me-work/00000000-0000-4000-8000-000000000002.jsonl"
+ },
+ {
+  "window_ref": "window:1",
+  "workspace_ref": "workspace:1",
+  "workspace_title": "alpha",
+  "surface_ref": "surface:3",
+  "surface_title": "waiting with nothing open",
+  "state": "waiting",
+  "waiting_for": {
+   "kind": "unknown"
+  },
+  "updated": 1791628200,
+  "age": 5400,
+  "cwd": "/Users/me/work/scratch",
+  "session_id": "00000000-0000-4000-8000-000000000003",
+  "pid": 4003,
+  "transcript_path": "testdata/home/.claude/projects/-Users-me-work/00000000-0000-4000-8000-000000000003.jsonl"
+ },
+ {
+  "window_ref": "window:1",
+  "workspace_ref": "workspace:1",
+  "workspace_title": "alpha",
+  "surface_ref": "surface:4",
+  "surface_title": "run the migration with a very long tab title that gets cut",
+  "state": "waiting",
+  "waiting_for": {
+   "kind": "permission",
+   "tool": "Bash",
+   "input": "./migrate.sh --apply --force"
+  },
+  "updated": 1791617460,
+  "age": 16140,
+  "cwd": "/Users/me/work/migrate",
+  "session_id": "00000000-0000-4000-8000-000000000004",
+  "pid": 4004,
+  "transcript_path": "testdata/home/.claude/projects/-Users-me-work/00000000-0000-4000-8000-000000000004.jsonl"
+ },
+ {
+  "window_ref": "window:1",
+  "workspace_ref": "workspace:1",
+  "workspace_title": "alpha",
+  "surface_ref": "surface:5",
+  "surface_title": "docs pass",
+  "state": "idle",
+  "waiting_for": null,
+  "updated": 1791633300,
+  "age": 300,
+  "cwd": "/Users/me/work/docs",
+  "session_id": "00000000-0000-4000-8000-000000000005",
+  "pid": 4005,
+  "transcript_path": "testdata/home/.claude/projects/-Users-me-work/00000000-0000-4000-8000-000000000005.jsonl"
+ },
+ {
+  "window_ref": "window:1",
+  "workspace_ref": "workspace:1",
+  "workspace_title": "alpha",
+  "surface_ref": "surface:6",
+  "surface_title": "background watcher",
+  "state": "shell",
+  "waiting_for": null,
+  "updated": 1791547200,
+  "age": 86400,
+  "cwd": "/Users/me/work/restore-6",
+  "session_id": "00000000-0000-4000-8000-000000000006",
+  "pid": 4006,
+  "transcript_path": "testdata/home/.claude/projects/-Users-me-work/00000000-0000-4000-8000-000000000006.jsonl"
+ },
+ {
+  "window_ref": "window:1",
+  "workspace_ref": "workspace:1",
+  "workspace_title": "alpha",
+  "surface_ref": "surface:7",
+  "surface_title": "old experiment",
+  "state": "stopped",
+  "waiting_for": null,
+  "updated": 1791540000,
+  "age": 93600,
+  "cwd": "/Users/me/work/restore-7",
+  "session_id": "00000000-0000-4000-8000-000000000007",
+  "pid": null,
+  "transcript_path": "testdata/home/.claude/projects/-Users-me-work/00000000-0000-4000-8000-000000000007.jsonl"
+ },
+ {
+  "window_ref": "window:1",
+  "workspace_ref": "workspace:2",
+  "workspace_title": "beta",
+  "surface_ref": "surface:10",
+  "surface_title": "beta tab",
+  "state": "idle",
+  "waiting_for": null,
+  "updated": 1791460800,
+  "age": 172800,
+  "cwd": "/Users/me/work/beta",
+  "session_id": "00000000-0000-4000-8000-000000000010",
+  "pid": 4010,
+  "transcript_path": "testdata/home/.claude/projects/-Users-me-work-beta/00000000-0000-4000-8000-000000000010.jsonl"
+ },
+ {
+  "window_ref": "window:1",
+  "workspace_ref": "workspace:2",
+  "workspace_title": "beta",
+  "surface_ref": "surface:11",
+  "surface_title": "never started",
+  "state": "stopped",
+  "waiting_for": null,
+  "updated": null,
+  "age": null,
+  "cwd": "/Users/me/work/restore-11",
+  "session_id": "00000000-0000-4000-8000-000000000011",
+  "pid": null,
+  "transcript_path": null
+ }
+]

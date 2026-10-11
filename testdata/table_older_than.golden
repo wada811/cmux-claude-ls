@@ -1,0 +1,3 @@
+WORKSPACE_REF  WORKSPACE_TITLE     SURFACE_REF   SURFACE_TITLE                     CWD                           STATE     AGE
+workspace:1    alpha               surface:7     old experiment                    ~/work/restore-7              stopped   1d
+workspace:2    beta                surface:10    beta tab                          ~/work/beta                   idle      2d

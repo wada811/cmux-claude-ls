@@ -1,0 +1,4 @@
+{"type": "user", "timestamp": "2026-10-10T07:00:00Z", "sessionId": "x", "isSidechain": false, "message": {"role": "user", "content": "go"}}
+{"type": "assistant", "timestamp": "2026-10-10T07:30:00Z", "sessionId": "x", "isSidechain": false, "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_ok", "name": "Read", "input": {"file_path": "/Users/me/work/migrate/a.txt"}}]}}
+{"type": "user", "timestamp": "2026-10-10T07:30:05Z", "sessionId": "x", "isSidechain": false, "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "toolu_ok", "content": "x"}]}}
+{"type": "assistant", "timestamp": "2026-10-10T07:31:00Z", "sessionId": "x", "isSidechain": false, "message": {"role": "assistant", "content": [{"type": "tool_use", "id": "toolu_p1", "name": "Bash", "input": {"command": "./migrate.sh   --apply\n--force", "description": "d"}}]}}

@@ -1,0 +1,102 @@
+{
+ "caller": {
+  "surface_ref": "surface:1",
+  "window_ref": "window:1",
+  "workspace_ref": "workspace:1",
+  "surface_type": "terminal"
+ },
+ "windows": [
+  {
+   "ref": "window:1",
+   "index": 1,
+   "workspaces": [
+    {
+     "ref": "workspace:1",
+     "id": "11111111-1111-4111-8111-111111111111",
+     "index": 0,
+     "title": "alpha",
+     "panes": [
+      {
+       "ref": "pane:1",
+       "surfaces": [
+        {
+         "ref": "surface:1",
+         "title": "build the importer",
+         "type": "terminal"
+        },
+        {
+         "ref": "surface:2",
+         "title": "調査: 構成の見直し",
+         "type": "terminal"
+        },
+        {
+         "ref": "surface:3",
+         "title": "waiting with nothing open",
+         "type": "terminal"
+        },
+        {
+         "ref": "surface:4",
+         "title": "run the migration with a very long tab title that gets cut",
+         "type": "terminal"
+        }
+       ]
+      },
+      {
+       "ref": "pane:2",
+       "surfaces": [
+        {
+         "ref": "surface:5",
+         "title": "docs pass",
+         "type": "terminal"
+        },
+        {
+         "ref": "surface:6",
+         "title": "background watcher",
+         "type": "terminal"
+        },
+        {
+         "ref": "surface:7",
+         "title": "old experiment",
+         "type": "terminal"
+        },
+        {
+         "ref": "surface:8",
+         "title": "plain shell",
+         "type": "terminal"
+        },
+        {
+         "ref": "surface:9",
+         "title": "docs page",
+         "type": "browser"
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "ref": "workspace:2",
+     "id": "22222222-2222-4222-8222-222222222222",
+     "index": 1,
+     "title": "beta",
+     "panes": [
+      {
+       "ref": "pane:3",
+       "surfaces": [
+        {
+         "ref": "surface:10",
+         "title": "beta tab",
+         "type": "terminal"
+        },
+        {
+         "ref": "surface:11",
+         "title": "never started",
+         "type": "terminal"
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

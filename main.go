@@ -155,6 +155,21 @@ const issuesURL = "https://github.com/wada811/cmux-list-claude-sessions/issues"
 
 var home, _ = os.UserHomeDir()
 
+// Everything outside the process goes through these variables, so tests can
+// replace cmux, ~/.claude, the clock and the process table.
+var (
+	// cmuxExec runs cmux with the given arguments and returns its stdout.
+	cmuxExec = func(args ...string) ([]byte, error) {
+		return exec.Command("cmux", args...).Output()
+	}
+	// claudeDir is Claude Code's data directory (~/.claude).
+	claudeDir = filepath.Join(home, ".claude")
+	// now returns the current time.
+	now = time.Now
+	// pidAlive reports whether a process with this pid exists.
+	pidAlive = func(pid int) bool { return syscall.Kill(pid, 0) == nil }
+)
+
 // Row is one listed surface. Its JSON and table forms come from fields.
 type Row struct {
 	Window         *string
@@ -208,13 +223,13 @@ type restoreRecord struct {
 
 // cmuxOutput runs `cmux <args> --json` and returns its stdout.
 func cmuxOutput(args ...string) ([]byte, error) {
-	return exec.Command("cmux", append(args, "--json")...).Output()
+	return cmuxExec(append(args, "--json")...)
 }
 
 // cmuxVersion returns the first line of `cmux --version` without the leading
 // "cmux ", or "" when it cannot be read.
 func cmuxVersion() string {
-	out, err := exec.Command("cmux", "--version").Output()
+	out, err := cmuxExec("--version")
 	if err != nil {
 		return ""
 	}
@@ -441,7 +456,7 @@ func sessionsUnreadable(total, readable int) bool {
 // sessionId could be read (a dead pid still counts as readable).
 func liveSessions() (bySid map[string]*sessionMeta, total, readable int) {
 	bySid = map[string]*sessionMeta{}
-	paths, _ := filepath.Glob(filepath.Join(home, ".claude", "sessions", "*.json"))
+	paths, _ := filepath.Glob(filepath.Join(claudeDir, "sessions", "*.json"))
 	total = len(paths)
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
@@ -453,7 +468,7 @@ func liveSessions() (bySid map[string]*sessionMeta, total, readable int) {
 			continue
 		}
 		readable++
-		if syscall.Kill(pid, 0) != nil {
+		if !pidAlive(pid) {
 			continue
 		}
 		var upd float64
@@ -687,7 +702,7 @@ func describe(row *Row, rec *restoreRecord, live map[string]*sessionMeta) {
 	sid := rec.CheckpointID
 	m := live[sid]
 	var jsonl *string
-	paths, _ := filepath.Glob(filepath.Join(home, ".claude", "projects", "*", sid+".jsonl"))
+	paths, _ := filepath.Glob(filepath.Join(claudeDir, "projects", "*", sid+".jsonl"))
 	var best time.Time
 	for _, p := range paths {
 		st, err := os.Stat(p)
@@ -1140,7 +1155,7 @@ func (o object) MarshalJSON() ([]byte, error) {
 }
 
 func printJSON(w io.Writer, rows []*Row, cols []field) {
-	now := time.Now()
+	now := now()
 	objs := make([]object, len(rows))
 	for i, r := range rows {
 		for _, f := range cols {
@@ -1169,7 +1184,7 @@ func printTable(w io.Writer, rows []*Row, cols []field) {
 		names[i] = strings.ToUpper(c.name)
 	}
 	emit(names)
-	now := time.Now()
+	now := now()
 	for _, r := range rows {
 		vals := make([]string, len(cols))
 		for i, c := range cols {
@@ -1299,7 +1314,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if *excludeSelf {
 		rows = excludeSurface(rows, selfSurface(os.Getenv("CMUX_SURFACE_ID"), caller))
 	}
-	rows = filterRows(rows, states, olderThan, time.Now())
+	rows = filterRows(rows, states, olderThan, now())
 	sortRows(rows, *sortFlag)
 	return emit(stdout, rows, *jsonMode, cols)
 }

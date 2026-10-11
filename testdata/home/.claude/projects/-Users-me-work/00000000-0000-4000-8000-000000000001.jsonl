@@ -1,0 +1,3 @@
+{"type": "user", "timestamp": "2026-10-10T11:50:00Z", "sessionId": "x", "isSidechain": false, "message": {"role": "user", "content": "hi"}}
+{"type": "assistant", "timestamp": "2026-10-10T11:59:30Z", "sessionId": "x", "isSidechain": false, "message": {"role": "assistant", "content": [{"type": "text", "text": "working"}]}}
+{"type": "mode", "sessionId": "x"}

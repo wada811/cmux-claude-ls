@@ -1,0 +1,10 @@
+WORKSPACE_REF  WORKSPACE_TITLE     SURFACE_REF   SURFACE_TITLE                     CWD                           STATE     AGE
+workspace:1    alpha               surface:3     waiting with nothing open         ~/work/scratch                waiting   1h
+workspace:1    alpha               surface:2     調査: 構成の見直し                ~/work/notes                  waiting   3h
+workspace:1    alpha               surface:4     run the migration with a very l…  ~/work/migrate                waiting   4h
+workspace:1    alpha               surface:5     docs pass                         ~/work/docs                   idle      5m
+workspace:2    beta                surface:10    beta tab                          ~/work/beta                   idle      2d
+workspace:1    alpha               surface:6     background watcher                ~/work/restore-6              shell     1d
+workspace:1    alpha               surface:1     build the importer                ~/work/importer               busy      now
+workspace:1    alpha               surface:7     old experiment                    ~/work/restore-7              stopped   1d
+workspace:2    beta                surface:11    never started                     ~/work/restore-11             stopped   -

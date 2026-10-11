@@ -1,0 +1,3 @@
+WORKSPACE_REF  WORKSPACE_TITLE     SURFACE_REF   SURFACE_TITLE                     CWD                           STATE     AGE
+workspace:2    beta                surface:10    beta tab                          ~/work/beta                   idle      2d
+workspace:2    beta                surface:11    never started                     ~/work/restore-11             stopped   -

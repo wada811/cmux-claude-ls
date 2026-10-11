@@ -1,0 +1,9 @@
+{
+ "pid": 4001,
+ "sessionId": "00000000-0000-4000-8000-000000000001",
+ "startedAt": 1760000000000,
+ "kind": "interactive",
+ "status": "busy",
+ "updatedAt": 1760100000000,
+ "cwd": "/Users/me/work/importer"
+}

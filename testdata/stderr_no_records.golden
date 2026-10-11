@@ -1,0 +1,2 @@
+cmux-list-claude-sessions: could not read the restore record of any of the 10 terminal surface(s) from `cmux surface resume show` (cmux 9.9.9 (1) ; the output format may have changed)
+Please report it at https://github.com/wada811/cmux-list-claude-sessions/issues

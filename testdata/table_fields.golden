@@ -1,0 +1,10 @@
+SURFACE_REF   STATE     AGE   WAITING_FOR                       PID
+surface:1     busy      now   -                                 4001
+surface:2     waiting   3h    question: Layout (+1)             4002
+surface:3     waiting   1h    unknown                           4003
+surface:4     waiting   4h    permission: Bash ./migrate.sh -…  4004
+surface:5     idle      5m    -                                 4005
+surface:6     shell     1d    -                                 4006
+surface:7     stopped   1d    -                                 -
+surface:10    idle      2d    -                                 4010
+surface:11    stopped   -     -                                 -
