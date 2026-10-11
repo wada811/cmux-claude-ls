@@ -3,6 +3,12 @@ version: 2
 
 project_name: cmux-list-claude-sessions
 
+before:
+  hooks:
+    # Generated into completions/ (ignored by git) for the archive and the cask.
+    - mkdir -p completions
+    - sh -c 'go run . --completion zsh > completions/_cmux-list-claude-sessions'
+
 builds:
   - main: .
     binary: cmux-list-claude-sessions
@@ -22,6 +28,7 @@ archives:
     files:
       - LICENSE
       - README.md
+      - completions/_cmux-list-claude-sessions
 
 checksum:
   name_template: checksums.txt
@@ -44,6 +51,8 @@ homebrew_casks:
       name: homebrew-tap
       token: "{{ .Env.GITHUB_TOKEN }}"
     directory: Casks
+    completions:
+      zsh: completions/_cmux-list-claude-sessions
     # The binary is not signed or notarized; drop the quarantine attribute.
     # Homebrew deprecated `postflight` (what `hooks` generates) for `postflight_steps`.
     custom_block: |

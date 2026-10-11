@@ -1,6 +1,6 @@
 package main
 
-const usageLine = "usage: cmux-list-claude-sessions [--state LIST] [--older-than DURATION] [--workspace WS] [--exclude-self] [--sort tree|state|age] [--fields LIST] [--json] [--version]"
+const usageLine = "usage: cmux-list-claude-sessions [--state LIST] [--older-than DURATION] [--workspace WS] [--exclude-self] [--sort tree|state|age] [--fields LIST] [--json] [--completion SHELL] [--version]"
 
 // helpText is written for both people and LLM agents: what the tool is for,
 // what each value means and what to do next.
@@ -35,6 +35,8 @@ Options:
                          comma-separated (e.g. surface_ref,state,age); see
                          Fields. Works for the table and for --json
   --json                 print the list as JSON, every field unless --fields
+  --completion SHELL     print the shell completion script and exit; SHELL is
+                         zsh (see Shell completion)
   --version              print the version and exit
   -h, --help             print this help
 
@@ -93,6 +95,14 @@ Examples:
   cmux-list-claude-sessions --state waiting --json --fields surface_ref,waiting_for
   cmux-list-claude-sessions --state waiting --json | jq -r '.[].transcript_path'
   cmux read-screen --surface surface:9   # look at a listed tab
+
+Shell completion (zsh):
+  Homebrew installs it. Otherwise put the script on your fpath, then run
+  compinit, or load it in .zshrc:
+    cmux-list-claude-sessions --completion zsh > ~/.zfunc/_cmux-list-claude-sessions
+    source <(cmux-list-claude-sessions --completion zsh)
+  It completes the flags and the values of --state, --fields, --sort and
+  --completion. --state and --fields take a comma-separated list.
 
 Exit status (like grep):
   0  at least one row was printed

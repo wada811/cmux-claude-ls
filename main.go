@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"runtime/debug"
+	"slices"
 	"strings"
 	"sync"
 	"time"
@@ -33,17 +34,50 @@ var home, _ = os.UserHomeDir()
 // now returns the current time. Tests replace it.
 var now = time.Now
 
-func run(args []string, stdout, stderr io.Writer) int {
+// sortOrders are the values --sort accepts.
+var sortOrders = []string{"tree", "state", "age"}
+
+// options holds the values of the flags.
+type options struct {
+	json        bool
+	version     bool
+	state       string
+	olderThan   string
+	workspace   string
+	excludeSelf bool
+	sort        string
+	fields      string
+	completion  string
+}
+
+// newFlagSet defines the flags. The usage strings are the descriptions the
+// shell completion shows; the help text has the full explanation.
+func newFlagSet() (*flag.FlagSet, *options) {
+	o := &options{}
 	fs := flag.NewFlagSet("cmux-list-claude-sessions", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
-	jsonMode := fs.Bool("json", false, "print the list as JSON")
-	showVersion := fs.Bool("version", false, "print the version and exit")
-	stateFlag := fs.String("state", "", "keep only these states (comma-separated)")
-	olderFlag := fs.String("older-than", "", "keep only tabs whose last message is older than this")
-	workspaceFlag := fs.String("workspace", "", "keep only this workspace (ref, UUID or index)")
-	excludeSelf := fs.Bool("exclude-self", false, "leave out the tab this command runs in")
-	sortFlag := fs.String("sort", "tree", "tree, state or age")
-	fieldsFlag := fs.String("fields", "", "fields to print (comma-separated)")
+	fs.BoolVar(&o.json, "json", false, "print the list as JSON")
+	fs.BoolVar(&o.version, "version", false, "print the version and exit")
+	fs.StringVar(&o.state, "state", "", "keep only these states (comma-separated)")
+	fs.StringVar(&o.olderThan, "older-than", "", "keep only tabs whose last message is older than this")
+	fs.StringVar(&o.workspace, "workspace", "", "keep only this workspace (ref, UUID or index)")
+	fs.BoolVar(&o.excludeSelf, "exclude-self", false, "leave out the tab this command runs in")
+	fs.StringVar(&o.sort, "sort", "tree", "sort order: "+orList(sortOrders))
+	fs.StringVar(&o.fields, "fields", "", "fields to print (comma-separated)")
+	fs.StringVar(&o.completion, "completion", "", "print the completion script for this shell ("+strings.Join(completionShells, ", ")+")")
+	return fs, o
+}
+
+// orList joins items as "a, b or c".
+func orList(items []string) string {
+	if len(items) < 2 {
+		return strings.Join(items, "")
+	}
+	return strings.Join(items[:len(items)-1], ", ") + " or " + items[len(items)-1]
+}
+
+func run(args []string, stdout, stderr io.Writer) int {
+	fs, o := newFlagSet()
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			io.WriteString(stdout, helpText+"\n")
@@ -54,41 +88,49 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if fs.NArg() > 0 {
 		return usageError(stderr, "unexpected argument: "+strings.Join(fs.Args(), " "))
 	}
-	if *showVersion {
+	set := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
+	if o.version {
 		fmt.Fprintf(stdout, "cmux-list-claude-sessions %s\n", versionString())
+		return 0
+	}
+	if set["completion"] {
+		script, err := completionScript(o.completion)
+		if err != nil {
+			return usageError(stderr, err.Error())
+		}
+		io.WriteString(stdout, script)
 		return 0
 	}
 
 	var states map[State]bool
 	var olderThan *time.Duration
-	set := map[string]bool{}
-	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
 	if set["state"] {
 		var err error
-		if states, err = parseStates(*stateFlag); err != nil {
+		if states, err = parseStates(o.state); err != nil {
 			return usageError(stderr, err.Error())
 		}
 	}
 	if set["older-than"] {
-		d, err := parseAge(*olderFlag)
+		d, err := parseAge(o.olderThan)
 		if err != nil {
 			return usageError(stderr, err.Error())
 		}
 		olderThan = &d
 	}
-	if set["workspace"] && strings.TrimSpace(*workspaceFlag) == "" {
+	if set["workspace"] && strings.TrimSpace(o.workspace) == "" {
 		return usageError(stderr, "invalid --workspace value (use workspace:N, a UUID or an index)")
 	}
-	if *sortFlag != "tree" && *sortFlag != "state" && *sortFlag != "age" {
-		return usageError(stderr, fmt.Sprintf("invalid --sort value %q (use tree, state or age)", *sortFlag))
+	if !slices.Contains(sortOrders, o.sort) {
+		return usageError(stderr, fmt.Sprintf("invalid --sort value %q (use %s)", o.sort, orList(sortOrders)))
 	}
 	cols := fields
-	if !*jsonMode {
+	if !o.json {
 		cols, _ = pickFields(strings.Join(tableFields, ","))
 	}
 	if set["fields"] {
 		var err error
-		if cols, err = pickFields(*fieldsFlag); err != nil {
+		if cols, err = pickFields(o.fields); err != nil {
 			return usageError(stderr, err.Error())
 		}
 	}
@@ -147,14 +189,14 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if set["workspace"] {
-		rows = filterWorkspace(rows, strings.TrimSpace(*workspaceFlag), caller.WindowRef)
+		rows = filterWorkspace(rows, strings.TrimSpace(o.workspace), caller.WindowRef)
 	}
-	if *excludeSelf {
+	if o.excludeSelf {
 		rows = excludeSurface(rows, selfSurface(os.Getenv("CMUX_SURFACE_ID"), caller))
 	}
 	rows = filterRows(rows, states, olderThan, now())
-	sortRows(rows, *sortFlag)
-	return emit(stdout, rows, *jsonMode, cols)
+	sortRows(rows, o.sort)
+	return emit(stdout, rows, o.json, cols)
 }
 
 func usageError(stderr io.Writer, msg string) int {

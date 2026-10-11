@@ -32,6 +32,22 @@ Or with Go:
 go install github.com/wada811/cmux-list-claude-sessions@latest
 ```
 
+### Shell completion
+
+For zsh, the Homebrew cask installs the completion script. Without Homebrew, generate it into a directory on your `fpath` (before `compinit`):
+
+```sh
+cmux-list-claude-sessions --completion zsh > ~/.zfunc/_cmux-list-claude-sessions
+```
+
+or load it from `.zshrc` after `compinit`:
+
+```sh
+source <(cmux-list-claude-sessions --completion zsh)
+```
+
+It completes the flags and the values of `--state`, `--fields`, `--sort` and `--completion`; `--state` and `--fields` take a comma-separated list.
+
 ## Usage
 
 ### Fields
@@ -77,6 +93,7 @@ Filters, `--sort` and `--fields` apply to the table and to `--json` alike.
 | `--workspace WS` | Keep only the tabs of one workspace. Takes the same values as `cmux --workspace` (e.g. `workspace:3`). A value that matches nothing lists nothing and exits with 1; it is not a usage error. |
 | `--exclude-self` | Leave out the tab this command runs in, so a Claude session that lists the others does not list itself. It uses the surface cmux reports for the `CMUX_SURFACE_ID` of the process. Outside cmux, where that variable is not set, it does nothing. |
 | `--sort ORDER` | `tree` (default) is the order of the cmux sidebar. `state` puts the tabs that need you first: `waiting`, `idle`, `shell`, `busy`, `stopped`, newest message first within a state. `age` is newest message first. Ties keep the `tree` order. |
+| `--completion SHELL` | Print the shell completion script and exit. Only `zsh` is supported; see [Shell completion](#shell-completion). |
 | `--fields LIST` | Print only these fields, in this order, comma-separated; for example `--fields surface_ref,state,age`. Works for the table and for `--json`. An unknown name is a usage error (exit 2). |
 
 ### JSON

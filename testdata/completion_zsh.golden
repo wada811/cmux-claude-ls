@@ -1,0 +1,21 @@
+#compdef cmux-list-claude-sessions
+
+_cmux-list-claude-sessions() {
+  _arguments -S \
+    '--completion=[print the completion script for this shell (zsh)]:shell:(zsh)' \
+    '--exclude-self[leave out the tab this command runs in]' \
+    '--fields=[fields to print (comma-separated)]:field:{_values -s , field window_ref workspace_ref workspace_title surface_ref surface_title state waiting_for updated age cwd session_id pid transcript_path}' \
+    '--json[print the list as JSON]' \
+    '--older-than=[keep only tabs whose last message is older than this]:duration: ' \
+    '--sort=[sort order: tree, state or age]:order:(tree state age)' \
+    '--state=[keep only these states (comma-separated)]:state:{_values -s , state busy waiting idle shell stopped}' \
+    '(- *)--version[print the version and exit]' \
+    '--workspace=[keep only this workspace (ref, UUID or index)]:workspace: ' \
+    '(- *)'{-h,--help}'[print the help]'
+}
+
+if [ "$funcstack[1]" = "_cmux-list-claude-sessions" ]; then
+  _cmux-list-claude-sessions "$@"
+else
+  compdef _cmux-list-claude-sessions cmux-list-claude-sessions
+fi
