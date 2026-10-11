@@ -6,17 +6,17 @@ When you run many Claude Code sessions in cmux tabs, the tab titles do not tell 
 
 ```console
 $ cmux-list-claude-sessions
-WS#   WORKSPACE           SURFACE#  SURFACE                           CWD                           STATE     AGE
-1     Main                1         ✳ Refactor the login flow         ~/src/app                     busy      now
-1     Main                3         Fix flaky test                    ~/src/app                     waiting   12m
-2     Review              7         PR #123                           ~/src/app--pr-123             stopped   2d
+WS_REF         WORKSPACE           SURFACE_REF   SURFACE                           CWD                           STATE     AGE
+workspace:1    Main                surface:1     ✳ Refactor the login flow         ~/src/app                     busy      now
+workspace:1    Main                surface:3     Fix flaky test                    ~/src/app                     waiting   12m
+workspace:2    Review              surface:7     PR #123                           ~/src/app--pr-123             stopped   2d
 ```
 
 Use it to:
 
 - **Find sessions waiting for you**: `STATE` is `waiting` while claude is blocked on a question or a permission prompt. `--state waiting` shows only those.
 - **Clean up finished tabs**: `stopped` means claude has exited but the tab is still open; `--state stopped --older-than 14d` shows the ones that have not moved for two weeks.
-- **Get from a tab to its session**: `--json` gives the session id and the transcript path, and `WS#` / `SURFACE#` are what `cmux` commands take.
+- **Get from a tab to its session**: `--json` gives the session id and the transcript path, and `WS_REF` / `SURFACE_REF` are what `cmux` commands take.
 
 It works well for LLM agents too: `--json` gives structured output, `--help` explains every column and state, and the exit status tells "nothing to list" (1) apart from "could not read cmux" (2), as `grep` does.
 
@@ -38,7 +38,7 @@ go install github.com/wada811/cmux-list-claude-sessions@latest
 
 | Column | Meaning |
 | --- | --- |
-| `WS#`, `SURFACE#` | cmux refs. Pass them as `workspace:N` / `surface:N` to `cmux` commands. |
+| `WS_REF`, `SURFACE_REF` | cmux refs of the workspace and the tab. |
 | `WORKSPACE`, `SURFACE` | Titles of the workspace and the tab. |
 | `CWD` | Working directory of the session. |
 | `STATE` | See below. |

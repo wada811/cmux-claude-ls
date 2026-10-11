@@ -99,7 +99,7 @@ read. It is not shown in the table.
   {"kind": "unknown"}    waiting, but no open question or tool call was found
 
 Columns:
-  WS#, SURFACE#  cmux refs: pass them as workspace:N / surface:N to cmux
+  WS_REF, SURFACE_REF  cmux refs of the workspace and the tab
   CWD            working directory of the session
   AGE            time since the last message in the session
   STATE          busy     working on a reply
@@ -886,14 +886,6 @@ func ago(ts *int64, now time.Time) string {
 	return "now"
 }
 
-func num(ref *string) string {
-	s := deref(ref)
-	if i := strings.LastIndex(s, ":"); i >= 0 {
-		return s[i+1:]
-	}
-	return s
-}
-
 var validStates = []string{"busy", "waiting", "idle", "shell", "stopped"}
 
 // parseStates parses --state: a comma-separated list of known states.
@@ -987,7 +979,7 @@ func printTable(w io.Writer, rows []*Row) {
 	cols := []struct {
 		name string
 		w    int
-	}{{"WS#", 4}, {"WORKSPACE", 18}, {"SURFACE#", 8}, {"SURFACE", 32}, {"CWD", 28}, {"STATE", 8}, {"AGE", 4}}
+	}{{"WS_REF", 13}, {"WORKSPACE", 18}, {"SURFACE_REF", 12}, {"SURFACE", 32}, {"CWD", 28}, {"STATE", 8}, {"AGE", 4}}
 	var sb strings.Builder
 	emit := func(vals []string) {
 		parts := make([]string, len(cols))
@@ -1005,7 +997,7 @@ func printTable(w io.Writer, rows []*Row) {
 	now := time.Now()
 	for _, r := range rows {
 		cwd := strings.ReplaceAll(deref(r.Cwd), home, "~")
-		emit([]string{num(r.Workspace), deref(r.WorkspaceTitle), num(r.Surface), deref(r.SurfaceTitle),
+		emit([]string{deref(r.Workspace), deref(r.WorkspaceTitle), deref(r.Surface), deref(r.SurfaceTitle),
 			cwd, fmt.Sprint(r.State), ago(r.Updated, now)})
 	}
 	io.WriteString(w, sb.String())
