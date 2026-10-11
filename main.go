@@ -46,7 +46,7 @@ const waitTailBytes = 256 * 1024
 // maxInputRunes caps the one-line summary of a permission request.
 const maxInputRunes = 200
 
-const usageLine = "usage: cmux-list-claude-sessions [--state LIST] [--older-than DURATION] [--exclude-self] [--sort tree|state|age] [--json] [--version]"
+const usageLine = "usage: cmux-list-claude-sessions [--state LIST] [--older-than DURATION] [--workspace WS] [--exclude-self] [--sort tree|state|age] [--json] [--version]"
 
 // helpText is written for both people and LLM agents: what the tool is for,
 // what each value means and what to do next.
@@ -67,6 +67,10 @@ Options:
   --older-than DURATION  keep only tabs whose last message is older than
                          DURATION: 30m, 12h, 14d or any Go duration (1h30m).
                          Tabs with no known last message are left out.
+  --workspace WS         keep only this workspace: workspace:3, a UUID, or a
+                         bare number, which is the 0-based position of the
+                         workspace in the sidebar (like cmux --workspace).
+                         An unknown value lists nothing and exits with 1.
   --exclude-self         leave out the tab this command runs in (found through
                          cmux's CMUX_SURFACE_ID; does nothing outside cmux)
   --sort ORDER           tree   cmux sidebar order (default)
@@ -111,6 +115,7 @@ Examples:
   cmux-list-claude-sessions --state stopped --older-than 14d
   cmux-list-claude-sessions --sort state
   cmux-list-claude-sessions --exclude-self --sort state
+  cmux-list-claude-sessions --workspace workspace:3 --state waiting
   cmux-list-claude-sessions --json --state waiting | jq -r '.[].transcript_path'
   cmux-list-claude-sessions --state waiting --json | jq '.[].waiting_for'
   cmux read-screen --workspace workspace:2 --surface surface:9   # look at a listed tab
@@ -141,6 +146,9 @@ type Row struct {
 	SessionID      string  `json:"session_id"`
 	Pid            any     `json:"pid"`
 	TranscriptPath *string `json:"transcript_path"`
+
+	wsID    string // workspace UUID from `cmux tree`
+	wsIndex int    // workspace index in its window, -1 when unknown
 }
 
 type tree struct {
@@ -153,6 +161,8 @@ type tree struct {
 		Ref        *string `json:"ref"`
 		Workspaces []struct {
 			Ref   *string `json:"ref"`
+			ID    *string `json:"id"`
+			Index *int    `json:"index"`
 			Title *string `json:"title"`
 			Panes []struct {
 				Surfaces []struct {
@@ -239,9 +249,14 @@ func parseTree(data []byte) ([]*Row, callerInfo, error) {
 			for _, pane := range ws.Panes {
 				for _, s := range pane.Surfaces {
 					if s.Type != nil && *s.Type == "terminal" {
+						idx := -1
+						if ws.Index != nil {
+							idx = *ws.Index
+						}
 						rows = append(rows, &Row{
 							Window: win.Ref, Workspace: ws.Ref, WorkspaceTitle: ws.Title,
 							Surface: s.Ref, SurfaceTitle: s.Title,
+							wsID: deref(ws.ID), wsIndex: idx,
 						})
 					}
 				}
@@ -263,6 +278,31 @@ func selfSurface(envSurfaceID string, caller callerInfo) string {
 		return ""
 	}
 	return caller.Surface
+}
+
+// matchWorkspace reports whether a row is in the workspace ws, given the same
+// forms as cmux --workspace: a ref (workspace:3), a UUID, or a bare number.
+// A bare number is the workspace index, counted per window, so it is looked up
+// in the caller's window when cmux reported one.
+func matchWorkspace(r *Row, ws string, callerWindow string) bool {
+	if n, err := strconv.Atoi(ws); err == nil && n >= 0 {
+		return r.wsIndex == n && (callerWindow == "" || deref(r.Window) == callerWindow)
+	}
+	return deref(r.Workspace) == ws || (r.wsID != "" && strings.EqualFold(r.wsID, ws))
+}
+
+// filterWorkspace keeps the rows in the workspace ws ("" keeps all rows).
+func filterWorkspace(rows []*Row, ws string, callerWindow string) []*Row {
+	if ws == "" {
+		return rows
+	}
+	out := []*Row{}
+	for _, r := range rows {
+		if matchWorkspace(r, ws, callerWindow) {
+			out = append(out, r)
+		}
+	}
+	return out
 }
 
 // excludeSurface drops the row of the given surface ref ("" keeps all rows).
@@ -977,6 +1017,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	stateFlag := fs.String("state", "", "keep only these states (comma-separated)")
 	olderFlag := fs.String("older-than", "", "keep only tabs whose last message is older than this")
+	workspaceFlag := fs.String("workspace", "", "keep only this workspace (ref, UUID or index)")
 	excludeSelf := fs.Bool("exclude-self", false, "leave out the tab this command runs in")
 	sortFlag := fs.String("sort", "tree", "tree, state or age")
 	if err := fs.Parse(args); err != nil {
@@ -1010,6 +1051,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 			return usageError(stderr, err.Error())
 		}
 		olderThan = &d
+	}
+	if set["workspace"] && strings.TrimSpace(*workspaceFlag) == "" {
+		return usageError(stderr, "invalid --workspace value (use workspace:N, a UUID or an index)")
 	}
 	if *sortFlag != "tree" && *sortFlag != "state" && *sortFlag != "age" {
 		return usageError(stderr, fmt.Sprintf("invalid --sort value %q (use tree, state or age)", *sortFlag))
@@ -1067,6 +1111,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 			describe(s, recs[i], live)
 			rows = append(rows, s)
 		}
+	}
+	if set["workspace"] {
+		rows = filterWorkspace(rows, strings.TrimSpace(*workspaceFlag), caller.Window)
 	}
 	if *excludeSelf {
 		rows = excludeSurface(rows, selfSurface(os.Getenv("CMUX_SURFACE_ID"), caller))

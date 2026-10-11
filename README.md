@@ -62,6 +62,7 @@ Filters and `--sort` apply to the table and to `--json` alike.
 | --- | --- |
 | `--state LIST` | Keep only these states. Comma-separated, from `busy`, `waiting`, `idle`, `shell`, `stopped`; for example `--state waiting,idle`. |
 | `--older-than DURATION` | Keep only tabs whose last message is older than `DURATION`: `30m`, `12h`, `14d` (a whole number of days) or any [Go duration](https://pkg.go.dev/time#ParseDuration) such as `1h30m`. Tabs with no known last message are left out. |
+| `--workspace WS` | Keep only the tabs of one workspace. Takes the same forms as `cmux --workspace`: a ref such as `workspace:3`, a UUID, or a bare number. A bare number is the 0-based position of the workspace in the sidebar of the window (the `index` of `cmux tree`), looked up in the window of the calling tab. A value that matches nothing lists nothing and exits with 1; it is not a usage error. |
 | `--exclude-self` | Leave out the tab this command runs in, so a Claude session that lists the others does not list itself. It uses the surface cmux reports for the `CMUX_SURFACE_ID` of the process. Outside cmux, where that variable is not set, it does nothing. |
 | `--sort ORDER` | `tree` (default) is the order of the cmux sidebar. `state` puts the tabs that need you first: `waiting`, `idle`, `shell`, `busy`, `stopped`, newest message first within a state. `age` is newest message first. Ties keep the `tree` order. |
 
@@ -144,6 +145,9 @@ cmux-list-claude-sessions --sort state
 
 # The other tabs, as seen from a session that runs inside cmux
 cmux-list-claude-sessions --exclude-self --sort state
+
+# Only one workspace
+cmux-list-claude-sessions --workspace workspace:3 --state waiting
 
 # Look at a listed tab, or read its transcript
 cmux read-screen --workspace workspace:1 --surface surface:3

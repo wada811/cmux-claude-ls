@@ -388,6 +388,8 @@ func TestRunUsageErrors(t *testing.T) {
 		{"--state", "waiting,foo"},
 		{"--older-than", "abc"},
 		{"--older-than", "-1d"},
+		{"--workspace", ""},
+		{"--workspace", "  "},
 		{"--sort", "foo"},
 		{"--sort", ""},
 	} {
@@ -495,5 +497,58 @@ func TestExcludeSelf(t *testing.T) {
 	// A caller that cmux did not report leaves every row.
 	if got := surfaces(excludeSurface(testRows(), selfSurface("x", callerInfo{}))); got != "s1,s2,s3,s4,s5,s6,s7,s8" {
 		t.Errorf("no caller: got %q", got)
+	}
+}
+
+func TestFilterWorkspace(t *testing.T) {
+	const uuid = "020161D6-DE4F-4BE5-B881-59C777FF6AD8"
+	mk := func(surface, window, ws string, idx int, id string) *Row {
+		return &Row{Surface: &surface, Window: &window, Workspace: &ws, wsIndex: idx, wsID: id}
+	}
+	rows := func() []*Row {
+		return []*Row{
+			mk("s1", "window:1", "workspace:1", 0, uuid),
+			mk("s2", "window:1", "workspace:5", 1, "AAAA"),
+			mk("s3", "window:1", "workspace:5", 1, "AAAA"),
+			mk("s4", "window:3", "workspace:17", 0, "BBBB"),
+			mk("s5", "window:3", "workspace:18", -1, ""),
+		}
+	}
+	for _, c := range []struct {
+		name         string
+		ws           string
+		callerWindow string
+		want         string
+	}{
+		{"ref", "workspace:5", "window:1", "s2,s3"},
+		{"ref in another window", "workspace:17", "window:1", "s4"},
+		{"uuid", uuid, "window:1", "s1"},
+		{"uuid lower case", strings.ToLower(uuid), "window:1", "s1"},
+		{"index", "1", "window:1", "s2,s3"},
+		{"index 0 in the caller's window", "0", "window:1", "s1"},
+		{"index 0 in the other window", "0", "window:3", "s4"},
+		{"index without caller window", "0", "", "s1,s4"},
+		{"ref number is not an index", "workspace:2", "window:1", ""},
+		{"unknown ref", "workspace:999", "window:1", ""},
+		{"unknown index", "99", "window:1", ""},
+		{"unknown uuid", "FFFFFFFF-0000-0000-0000-000000000000", "window:1", ""},
+		{"unknown index never matches a row without index", "-1", "", ""},
+		{"empty keeps all", "", "window:1", "s1,s2,s3,s4,s5"},
+	} {
+		if got := surfaces(filterWorkspace(rows(), c.ws, c.callerWindow)); got != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+func TestParseTreeWorkspace(t *testing.T) {
+	in := `{"windows":[{"ref":"window:1","workspaces":[{"ref":"workspace:5","id":"AAAA","index":1,"panes":[{"surfaces":[{"ref":"surface:1","type":"terminal"}]}]},
+		{"ref":"workspace:6","panes":[{"surfaces":[{"ref":"surface:2","type":"terminal"}]}]}]}]}`
+	rows, _, err := parseTree([]byte(in))
+	if err != nil || len(rows) != 2 {
+		t.Fatalf("got %d rows, %v", len(rows), err)
+	}
+	if rows[0].wsID != "AAAA" || rows[0].wsIndex != 1 || rows[1].wsID != "" || rows[1].wsIndex != -1 {
+		t.Errorf("got %q/%d and %q/%d", rows[0].wsID, rows[0].wsIndex, rows[1].wsID, rows[1].wsIndex)
 	}
 }
