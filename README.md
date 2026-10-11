@@ -51,7 +51,7 @@ Each row has the fields below. Every field is a JSON key and, in upper case, a t
 | `age` | ✓ | Time since the last message. JSON: seconds. Table: `12m`, `3h`, `2d`. |
 | `cwd` | ✓ | Working directory of the session. The table shortens `$HOME` to `~`. |
 | `session_id` | | Claude Code session id (the `checkpoint_id` of the cmux restore record). |
-| `pid` | | Process id of the live session. `null` when `state` is `stopped`. |
+| `pid` | | Process id of the live session. `null` (table: `-`) when `state` is `stopped`. |
 | `transcript_path` | | Path of the session's `.jsonl` transcript. `null` if it is not found. |
 
 `session_id` and `transcript_path` are named like the input that Claude Code passes to hooks.

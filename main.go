@@ -58,7 +58,8 @@ runs (or ran) claude, across all windows and workspaces, with its state.
 Use it to:
   - find sessions waiting for your answer        (--state waiting)
   - find finished tabs that can be closed        (--state stopped --older-than 14d)
-  - get a tab's session id and transcript path   (--json)
+  - get a tab's session id and transcript path   (--json, or
+                                                  --fields session_id,transcript_path)
 
 ` + usageLine + `
 
@@ -87,8 +88,9 @@ Options:
 Filters, --sort and --fields apply to the table and to --json alike.
 
 Fields:
-Each field is a JSON key and, in upper case, a table header. The table shows
-the ones marked * unless --fields is given; JSON shows them all.
+  Each field is a JSON key and, in upper case, a table header. The table
+  shows the ones marked * unless --fields is given; JSON shows them all.
+
   window_ref         cmux ref of the window
   workspace_ref *    cmux ref of the workspace
   workspace_title *  title of the workspace
@@ -108,8 +110,11 @@ the ones marked * unless --fields is given; JSON shows them all.
   cwd *              working directory (the table shortens $HOME to ~)
   session_id         Claude Code session id
   pid                process id of claude while it runs, else null
+                     (table: -)
   transcript_path    the session's .jsonl transcript
-session_id and transcript_path are named like the input of Claude Code hooks.
+
+  session_id and transcript_path are named like the input of Claude Code
+  hooks.
 
 waiting_for says what a "waiting" session is blocked on, read from the end of
 its transcript. It is null for other states and when the transcript cannot be
