@@ -95,7 +95,8 @@ Examples:
   cmux-claude-surfaces --state waiting --json --fields surface_ref,waiting_for
   cmux-claude-surfaces --state waiting --json | jq -r '.[].transcript_path'
   cmux read-screen --surface surface:9   # look at a listed tab
-  cmux close-surface --workspace workspace:2 --surface surface:7   # close one
+  cmux close-surface --workspace <workspace_ref> --surface <surface_ref>
+                                         # close one; take both refs from one row
 
 Shell completion (zsh):
   Homebrew installs it. Otherwise put the script on your fpath, then run

@@ -177,8 +177,9 @@ cmux-claude-surfaces --workspace workspace:3 --state waiting
 cmux read-screen --surface surface:3
 cmux-claude-surfaces --json | jq -r '.[] | select(.surface_ref == "surface:3") | .transcript_path' | xargs tail -n 5
 
-# Close a listed tab (this tool only lists; closing is cmux's job)
-cmux close-surface --workspace workspace:2 --surface surface:7
+# Close a listed tab (this tool only lists; closing is cmux's job).
+# Take both refs from the same row: an unknown surface ref makes cmux close the current tab.
+cmux close-surface --workspace <workspace_ref> --surface <surface_ref>
 ```
 
 `cmux-claude-surfaces --help` prints all of this in short form.
