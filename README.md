@@ -6,7 +6,7 @@ When you run many Claude Code sessions in cmux tabs, the tab titles do not tell 
 
 ```console
 $ cmux-list-claude-sessions
-WS_REF         WORKSPACE           SURFACE_REF   SURFACE                           CWD                           STATE     AGE
+WORKSPACE_REF  WORKSPACE_TITLE     SURFACE_REF   SURFACE_TITLE                     CWD                           STATE     AGE
 workspace:1    Main                surface:1     ✳ Refactor the login flow         ~/src/app                     busy      now
 workspace:1    Main                surface:3     Fix flaky test                    ~/src/app                     waiting   12m
 workspace:2    Review              surface:7     PR #123                           ~/src/app--pr-123             stopped   2d
@@ -16,9 +16,9 @@ Use it to:
 
 - **Find sessions waiting for you**: `STATE` is `waiting` while claude is blocked on a question or a permission prompt. `--state waiting` shows only those.
 - **Clean up finished tabs**: `stopped` means claude has exited but the tab is still open; `--state stopped --older-than 14d` shows the ones that have not moved for two weeks.
-- **Get from a tab to its session**: `--json` gives the session id and the transcript path, and `WS_REF` / `SURFACE_REF` are what `cmux` commands take.
+- **Get from a tab to its session**: `--json` gives the session id and the transcript path, and `workspace_ref` / `surface_ref` are what `cmux` commands take.
 
-It works well for LLM agents too: `--json` gives structured output, `--help` explains every column and state, and the exit status tells "nothing to list" (1) apart from "could not read cmux" (2), as `grep` does.
+It works well for LLM agents too: `--json` gives structured output, `--help` explains every field and state, and the exit status tells "nothing to list" (1) apart from "could not read cmux" (2), as `grep` does.
 
 ## Install
 
@@ -34,17 +34,29 @@ go install github.com/wada811/cmux-list-claude-sessions@latest
 
 ## Usage
 
-### Table
+### Fields
 
-| Column | Meaning |
-| --- | --- |
-| `WS_REF`, `SURFACE_REF` | cmux refs of the workspace and the tab. |
-| `WORKSPACE`, `SURFACE` | Titles of the workspace and the tab. |
-| `CWD` | Working directory of the session. |
-| `STATE` | See below. |
-| `AGE` | Time since the last message in the session. |
+Each row has the fields below. Every field is a JSON key and, in upper case, a table header, so `--fields` takes the same names for both. The table shows the fields marked ✓ unless `--fields` is given; `--json` shows them all.
 
-| `STATE` | Meaning |
+| Field | Table | Meaning |
+| --- | --- | --- |
+| `window_ref` | | cmux ref of the window. |
+| `workspace_ref` | ✓ | cmux ref of the workspace. Pass it to `cmux --workspace`. |
+| `workspace_title` | ✓ | Title of the workspace. |
+| `surface_ref` | ✓ | cmux ref of the tab. Pass it to `cmux --surface`, e.g. `cmux read-screen --surface surface:7`. |
+| `surface_title` | ✓ | Title of the tab. |
+| `state` | ✓ | See below. |
+| `waiting_for` | | What a `waiting` session is blocked on (see [JSON](#json)). `null` for other states and when the transcript cannot be read. The table shows one line, such as `question: <header>` or `permission: Bash go test ./...`. |
+| `updated` | | Time of the last message. JSON: Unix seconds. Table: local time. `null` if there is no transcript. |
+| `age` | ✓ | Time since the last message. JSON: seconds. Table: `12m`, `3h`, `2d`. |
+| `cwd` | ✓ | Working directory of the session. The table shortens `$HOME` to `~`. |
+| `session_id` | | Claude Code session id (the `checkpoint_id` of the cmux restore record). |
+| `pid` | | Process id of the live session. `null` when `state` is `stopped`. |
+| `transcript_path` | | Path of the session's `.jsonl` transcript. `null` if it is not found. |
+
+`session_id` and `transcript_path` are named like the input that Claude Code passes to hooks.
+
+| `state` | Meaning |
 | --- | --- |
 | `busy` | Working on a reply. |
 | `waiting` | Blocked on a question or a permission prompt. Needs you. |
@@ -54,19 +66,9 @@ go install github.com/wada811/cmux-list-claude-sessions@latest
 
 Plain shell tabs are not listed.
 
-`--columns LIST` prints only the columns you name, in that order. Use the
-column names in lowercase, comma-separated: `ws_ref`, `workspace`,
-`surface_ref`, `surface`, `cwd`, `state`, `age`. An unknown name is a usage
-error (exit 2). It applies to the table only; with `--json`, pick keys with
-`jq` instead.
+### Options
 
-```sh
-cmux-list-claude-sessions --columns surface_ref,surface,state,age
-```
-
-### Filter and sort
-
-Filters and `--sort` apply to the table and to `--json` alike.
+Filters, `--sort` and `--fields` apply to the table and to `--json` alike.
 
 | Flag | Meaning |
 | --- | --- |
@@ -75,37 +77,40 @@ Filters and `--sort` apply to the table and to `--json` alike.
 | `--workspace WS` | Keep only the tabs of one workspace. Takes the same values as `cmux --workspace` (e.g. `workspace:3`). A value that matches nothing lists nothing and exits with 1; it is not a usage error. |
 | `--exclude-self` | Leave out the tab this command runs in, so a Claude session that lists the others does not list itself. It uses the surface cmux reports for the `CMUX_SURFACE_ID` of the process. Outside cmux, where that variable is not set, it does nothing. |
 | `--sort ORDER` | `tree` (default) is the order of the cmux sidebar. `state` puts the tabs that need you first: `waiting`, `idle`, `shell`, `busy`, `stopped`, newest message first within a state. `age` is newest message first. Ties keep the `tree` order. |
+| `--fields LIST` | Print only these fields, in this order, comma-separated; for example `--fields surface_ref,state,age`. Works for the table and for `--json`. An unknown name is a usage error (exit 2). |
 
 ### JSON
 
-Prints the same list as JSON, with the session id, pid and transcript path added. A `stopped` surface has `null` for `pid`. `session_id` and `transcript_path` are named like the input that Claude Code passes to hooks.
+`--json` prints the same list as JSON, with every field unless `--fields` is given.
 
 ```console
 $ cmux-list-claude-sessions --json
 [
  {
-  "window": "window:1",
-  "workspace": "workspace:1",
+  "window_ref": "window:1",
+  "workspace_ref": "workspace:1",
   "workspace_title": "Main",
-  "surface": "surface:1",
+  "surface_ref": "surface:1",
   "surface_title": "✳ Refactor the login flow",
   "state": "busy",
   "waiting_for": null,
   "updated": 1760000000,
+  "age": 5,
   "cwd": "/Users/me/src/app",
   "session_id": "0b6f2c1e-5a43-4f0e-9a52-1d3c8e7b4a10",
   "pid": 12345,
   "transcript_path": "/Users/me/.claude/projects/-Users-me-src-app/0b6f2c1e-5a43-4f0e-9a52-1d3c8e7b4a10.jsonl"
  },
  {
-  "window": "window:1",
-  "workspace": "workspace:2",
+  "window_ref": "window:1",
+  "workspace_ref": "workspace:2",
   "workspace_title": "Review",
-  "surface": "surface:7",
+  "surface_ref": "surface:7",
   "surface_title": "PR #123",
   "state": "stopped",
   "waiting_for": null,
   "updated": 1759830000,
+  "age": 170005,
   "cwd": "/Users/me/src/app--pr-123",
   "session_id": "7d2e9a40-8b1c-4c6d-b3f5-62a1c0e94d28",
   "pid": null,
@@ -113,18 +118,6 @@ $ cmux-list-claude-sessions --json
  }
 ]
 ```
-
-| Key | Meaning |
-| --- | --- |
-| `window`, `workspace`, `surface` | cmux refs. Pass them to `cmux` commands, e.g. `cmux read-screen --surface surface:7`. |
-| `workspace_title`, `surface_title` | Titles of the workspace and the surface. |
-| `state` | Live session status (`busy`, `idle`, `waiting`, ...), or `stopped` when the claude process has exited but the tab is still open. |
-| `waiting_for` | What a `waiting` session is blocked on, read from the end of its transcript. `null` for other states and when the transcript cannot be read. Not shown in the table. See below. |
-| `updated` | Time of the last message in the session, as Unix seconds. `null` if there is no transcript. |
-| `cwd` | Working directory of the session. |
-| `session_id` | Claude session id (the `checkpoint_id` of the restore record). |
-| `pid` | Process id of the live session. `null` when `state` is `stopped`. |
-| `transcript_path` | Path of the session transcript. `null` if it is not found. |
 
 `waiting_for` has one of three shapes:
 
@@ -145,7 +138,8 @@ $ cmux-list-claude-sessions --json
 cmux-list-claude-sessions --state waiting
 
 # What the waiting sessions are asking
-cmux-list-claude-sessions --state waiting --json | jq '.[].waiting_for'
+cmux-list-claude-sessions --state waiting --fields surface_ref,waiting_for
+cmux-list-claude-sessions --state waiting --json --fields surface_ref,waiting_for
 
 # Tabs that finished and have not moved for 14 days (candidates to close)
 cmux-list-claude-sessions --state stopped --older-than 14d
@@ -157,14 +151,14 @@ cmux-list-claude-sessions --sort state
 cmux-list-claude-sessions --exclude-self --sort state
 
 # A narrow table: leave out the workspace and the working directory
-cmux-list-claude-sessions --columns surface_ref,surface,state,age
+cmux-list-claude-sessions --fields surface_ref,surface_title,state,age
 
 # Only one workspace
 cmux-list-claude-sessions --workspace workspace:3 --state waiting
 
 # Look at a listed tab, or read its transcript
 cmux read-screen --surface surface:3
-cmux-list-claude-sessions --json | jq -r '.[] | select(.surface == "surface:3") | .transcript_path' | xargs tail -n 5
+cmux-list-claude-sessions --json | jq -r '.[] | select(.surface_ref == "surface:3") | .transcript_path' | xargs tail -n 5
 ```
 
 `cmux-list-claude-sessions --help` prints all of this in short form.

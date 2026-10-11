@@ -349,7 +349,11 @@ func TestEmitExitStatus(t *testing.T) {
 		{"json empty", []*Row{}, true, 1, "[]"},
 	} {
 		var out bytes.Buffer
-		code := emit(&out, c.rows, c.json, columns)
+		cols := fields
+		if !c.json {
+			cols, _ = pickFields(strings.Join(tableFields, ","))
+		}
+		code := emit(&out, c.rows, c.json, cols)
 		if code != c.wantCode || !strings.Contains(out.String(), c.wantOut) {
 			t.Errorf("%s: code=%d out=%q", c.name, code, out.String())
 		}
@@ -360,14 +364,14 @@ func TestJSONKeys(t *testing.T) {
 	s := "x"
 	var out bytes.Buffer
 	emit(&out, []*Row{{Window: &s, Workspace: &s, WorkspaceTitle: &s, Surface: &s, SurfaceTitle: &s,
-		State: "idle", Cwd: &s, SessionID: "id", TranscriptPath: &s}}, true, columns)
+		State: "idle", Cwd: &s, SessionID: "id", TranscriptPath: &s}}, true, fields)
 	var got []json.RawMessage
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil || len(got) != 1 {
 		t.Fatalf("bad json: %v %q", err, out.String())
 	}
 	// Keys must appear in this order.
-	want := []string{"window", "workspace", "workspace_title", "surface", "surface_title", "state",
-		"waiting_for", "updated", "cwd", "session_id", "pid", "transcript_path"}
+	want := []string{"window_ref", "workspace_ref", "workspace_title", "surface_ref", "surface_title", "state",
+		"waiting_for", "updated", "age", "cwd", "session_id", "pid", "transcript_path"}
 	pos := -1
 	for _, k := range want {
 		i := strings.Index(out.String(), `"`+k+`":`)
@@ -555,8 +559,8 @@ func TestParseTreeWorkspace(t *testing.T) {
 	}
 }
 
-func TestColumns(t *testing.T) {
-	cols, err := parseColumns("surface_ref, STATE,age")
+func TestFields(t *testing.T) {
+	cols, err := pickFields("surface_ref, STATE,age")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -566,16 +570,52 @@ func TestColumns(t *testing.T) {
 	if got := strings.Fields(header); !slices.Equal(got, []string{"SURFACE_REF", "STATE", "AGE"}) {
 		t.Errorf("header = %q", header)
 	}
-	for _, bad := range []string{"", "state,", "title"} {
-		if _, err := parseColumns(bad); err == nil {
-			t.Errorf("parseColumns(%q): want error", bad)
+	out.Reset()
+	printJSON(&out, testRows()[:1], cols)
+	var got []map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil || len(got) != 1 || len(got[0]) != 3 {
+		t.Errorf("json = %q", out.String())
+	}
+	for _, bad := range []string{"", "state,", "title", "surface"} {
+		if _, err := pickFields(bad); err == nil {
+			t.Errorf("pickFields(%q): want error", bad)
 		}
 	}
 	var stderr bytes.Buffer
-	if code := run([]string{"--columns", "nope"}, io.Discard, &stderr); code != 2 {
-		t.Errorf("unknown column: code=%d", code)
+	if code := run([]string{"--fields", "nope"}, io.Discard, &stderr); code != 2 {
+		t.Errorf("unknown field: code=%d", code)
 	}
-	if code := run([]string{"--columns", "state", "--json"}, io.Discard, &stderr); code != 2 {
-		t.Errorf("--columns with --json: code=%d", code)
+}
+
+func TestFieldForms(t *testing.T) {
+	now := time.Unix(1_000_000, 0)
+	ts := int64(1_000_000 - 3*3600)
+	r := &Row{Updated: &ts, Pid: float64(1234567)}
+	get := func(name string) field { return fields[slices.Index(fieldNames(), name)] }
+	if v := get("age").value(r, now); v != int64(3*3600) {
+		t.Errorf("age value = %v", v)
+	}
+	if v := get("age").text(r, now); v != "3h" {
+		t.Errorf("age text = %q", v)
+	}
+	if v := get("pid").text(r, now); v != "1234567" {
+		t.Errorf("pid text = %q", v)
+	}
+	if v := get("age").value(&Row{}, now); v != nil {
+		t.Errorf("age without updated = %v", v)
+	}
+	for _, c := range []struct {
+		in   any
+		want string
+	}{
+		{nil, "-"},
+		{waitUnknown{"unknown"}, "unknown"},
+		{waitPermission{"permission", "Bash", "go test"}, "permission: Bash go test"},
+		{waitQuestions{"question", []waitQuestion{{Question: "q1", Header: "h1"}, {Question: "q2"}}}, "question: h1 (+1)"},
+		{waitQuestions{"question", []waitQuestion{{Question: "q1"}}}, "question: q1"},
+	} {
+		if got := waitingText(c.in); got != c.want {
+			t.Errorf("waitingText(%v) = %q, want %q", c.in, got, c.want)
+		}
 	}
 }

@@ -47,7 +47,7 @@ const waitTailBytes = 256 * 1024
 // maxInputRunes caps the one-line summary of a permission request.
 const maxInputRunes = 200
 
-const usageLine = "usage: cmux-list-claude-sessions [--state LIST] [--older-than DURATION] [--workspace WS] [--exclude-self] [--sort tree|state|age] [--columns LIST] [--json] [--version]"
+const usageLine = "usage: cmux-list-claude-sessions [--state LIST] [--older-than DURATION] [--workspace WS] [--exclude-self] [--sort tree|state|age] [--fields LIST] [--json] [--version]"
 
 // helpText is written for both people and LLM agents: what the tool is for,
 // what each value means and what to do next.
@@ -77,22 +77,43 @@ Options:
                          state  waiting, idle, shell, busy, stopped; newest
                                 first within a state
                          age    newest last message first
-  --columns LIST         print only these table columns, in this order,
-                         comma-separated, from ws_ref, workspace, surface_ref,
-                         surface, cwd, state, age (e.g. surface_ref,state,age)
-  --json                 print the list as JSON (keys: window, workspace,
-                         workspace_title, surface, surface_title, state,
-                         waiting_for, updated, cwd, session_id, pid,
-                         transcript_path)
+  --fields LIST          print only these fields, in this order,
+                         comma-separated (e.g. surface_ref,state,age); see
+                         Fields. Works for the table and for --json
+  --json                 print the list as JSON, every field unless --fields
   --version              print the version and exit
   -h, --help             print this help
 
-Filters and --sort apply to the table and to --json alike. The JSON keys
+Filters, --sort and --fields apply to the table and to --json alike.
+
+Fields:
+Each field is a JSON key and, in upper case, a table header. The table shows
+the ones marked * unless --fields is given; JSON shows them all.
+  window_ref         cmux ref of the window
+  workspace_ref *    cmux ref of the workspace
+  workspace_title *  title of the workspace
+  surface_ref *      cmux ref of the tab
+  surface_title *    title of the tab
+  state *            busy     working on a reply
+                     waiting  blocked on a question or a permission prompt
+                     idle     reply finished; at the prompt
+                     shell    reply finished; background shells or agents
+                              still run
+                     stopped  claude has exited; the tab is still open
+  waiting_for        what a waiting session is blocked on (see below); the
+                     table shows one line such as "question: <header>"
+  updated            time of the last message (JSON: Unix seconds; table:
+                     local time)
+  age *              time since the last message (JSON: seconds; table: 3h)
+  cwd *              working directory (the table shortens $HOME to ~)
+  session_id         Claude Code session id
+  pid                process id of claude while it runs, else null
+  transcript_path    the session's .jsonl transcript
 session_id and transcript_path are named like the input of Claude Code hooks.
 
 waiting_for says what a "waiting" session is blocked on, read from the end of
 its transcript. It is null for other states and when the transcript cannot be
-read. It is not shown in the table.
+read.
   {"kind": "question", "questions": [{"question": "...", "header": "...",
      "options": ["label", ...], "multi_select": false}]}
                          an AskUserQuestion is open
@@ -102,26 +123,17 @@ read. It is not shown in the table.
                          the tool input as one short line of JSON
   {"kind": "unknown"}    waiting, but no open question or tool call was found
 
-Columns:
-  WS_REF, SURFACE_REF  cmux refs of the workspace and the tab
-  CWD            working directory of the session
-  AGE            time since the last message in the session
-  STATE          busy     working on a reply
-                 waiting  blocked on a question or a permission prompt
-                 idle     reply finished; at the prompt
-                 shell    reply finished; background shells or agents still run
-                 stopped  claude has exited; the tab is still open
-
 Examples:
   cmux-list-claude-sessions
   cmux-list-claude-sessions --state waiting
   cmux-list-claude-sessions --state stopped --older-than 14d
   cmux-list-claude-sessions --sort state
   cmux-list-claude-sessions --exclude-self --sort state
-  cmux-list-claude-sessions --columns surface_ref,surface,state,age
+  cmux-list-claude-sessions --fields surface_ref,surface_title,state,age
+  cmux-list-claude-sessions --state waiting --fields surface_ref,waiting_for
   cmux-list-claude-sessions --workspace workspace:3 --state waiting
+  cmux-list-claude-sessions --state waiting --json --fields surface_ref,waiting_for
   cmux-list-claude-sessions --state waiting --json | jq -r '.[].transcript_path'
-  cmux-list-claude-sessions --state waiting --json | jq '.[].waiting_for'
   cmux read-screen --surface surface:9   # look at a listed tab
 
 Exit status (like grep):
@@ -138,20 +150,20 @@ const issuesURL = "https://github.com/wada811/cmux-list-claude-sessions/issues"
 
 var home, _ = os.UserHomeDir()
 
-// Row is one listed surface. Field order is the JSON key order.
+// Row is one listed surface. Its JSON and table forms come from fields.
 type Row struct {
-	Window         *string `json:"window"`
-	Workspace      *string `json:"workspace"`
-	WorkspaceTitle *string `json:"workspace_title"`
-	Surface        *string `json:"surface"`
-	SurfaceTitle   *string `json:"surface_title"`
-	State          any     `json:"state"`
-	WaitingFor     any     `json:"waiting_for"`
-	Updated        *int64  `json:"updated"`
-	Cwd            *string `json:"cwd"`
-	SessionID      string  `json:"session_id"`
-	Pid            any     `json:"pid"`
-	TranscriptPath *string `json:"transcript_path"`
+	Window         *string
+	Workspace      *string
+	WorkspaceTitle *string
+	Surface        *string
+	SurfaceTitle   *string
+	State          any
+	WaitingFor     any
+	Updated        *int64
+	Cwd            *string
+	SessionID      string
+	Pid            any
+	TranscriptPath *string
 
 	wsID    string // workspace UUID from `cmux tree`
 	wsIndex int    // workspace index in its window, -1 when unknown
@@ -980,49 +992,164 @@ func sortRows(rows []*Row, order string) {
 	}
 }
 
-// column is one column of the table: its header, its width and its value.
-type column struct {
-	name  string
-	width int
-	value func(r *Row, now time.Time) string
+// field is one value of a row, shown as a table column and a JSON key of the
+// same name: text is the form for people, value the form for programs.
+type field struct {
+	name  string // JSON key; the table header is its upper case
+	width int    // table column width
+	text  func(r *Row, now time.Time) string
+	value func(r *Row, now time.Time) any
 }
 
-// columns lists every table column in the default order. --columns picks
-// from them by lowercase name.
-var columns = []column{
-	{"WS_REF", 13, func(r *Row, _ time.Time) string { return deref(r.Workspace) }},
-	{"WORKSPACE", 18, func(r *Row, _ time.Time) string { return deref(r.WorkspaceTitle) }},
-	{"SURFACE_REF", 12, func(r *Row, _ time.Time) string { return deref(r.Surface) }},
-	{"SURFACE", 32, func(r *Row, _ time.Time) string { return deref(r.SurfaceTitle) }},
-	{"CWD", 28, func(r *Row, _ time.Time) string { return strings.ReplaceAll(deref(r.Cwd), home, "~") }},
-	{"STATE", 8, func(r *Row, _ time.Time) string { return fmt.Sprint(r.State) }},
-	{"AGE", 4, func(r *Row, now time.Time) string { return ago(r.Updated, now) }},
+func str(p *string) any {
+	if p == nil {
+		return nil
+	}
+	return *p
 }
 
-// columnNames returns the lowercase names --columns accepts.
-func columnNames() []string {
-	names := make([]string, len(columns))
-	for i, c := range columns {
-		names[i] = strings.ToLower(c.name)
+// fields lists every field in the JSON key order.
+var fields = []field{
+	{"window_ref", 10, func(r *Row, _ time.Time) string { return deref(r.Window) },
+		func(r *Row, _ time.Time) any { return str(r.Window) }},
+	{"workspace_ref", 13, func(r *Row, _ time.Time) string { return deref(r.Workspace) },
+		func(r *Row, _ time.Time) any { return str(r.Workspace) }},
+	{"workspace_title", 18, func(r *Row, _ time.Time) string { return deref(r.WorkspaceTitle) },
+		func(r *Row, _ time.Time) any { return str(r.WorkspaceTitle) }},
+	{"surface_ref", 12, func(r *Row, _ time.Time) string { return deref(r.Surface) },
+		func(r *Row, _ time.Time) any { return str(r.Surface) }},
+	{"surface_title", 32, func(r *Row, _ time.Time) string { return deref(r.SurfaceTitle) },
+		func(r *Row, _ time.Time) any { return str(r.SurfaceTitle) }},
+	{"state", 8, func(r *Row, _ time.Time) string { return fmt.Sprint(r.State) },
+		func(r *Row, _ time.Time) any { return r.State }},
+	{"waiting_for", 32, func(r *Row, _ time.Time) string { return waitingText(r.WaitingFor) },
+		func(r *Row, _ time.Time) any { return r.WaitingFor }},
+	{"updated", 16, func(r *Row, _ time.Time) string {
+		if r.Updated == nil {
+			return "-"
+		}
+		return time.Unix(*r.Updated, 0).Local().Format("2006-01-02 15:04")
+	}, func(r *Row, _ time.Time) any {
+		if r.Updated == nil {
+			return nil
+		}
+		return *r.Updated
+	}},
+	{"age", 4, func(r *Row, now time.Time) string { return ago(r.Updated, now) },
+		func(r *Row, now time.Time) any {
+			if r.Updated == nil {
+				return nil
+			}
+			return max(now.Unix()-*r.Updated, 0)
+		}},
+	{"cwd", 28, func(r *Row, _ time.Time) string { return strings.ReplaceAll(deref(r.Cwd), home, "~") },
+		func(r *Row, _ time.Time) any { return str(r.Cwd) }},
+	{"session_id", 36, func(r *Row, _ time.Time) string { return r.SessionID },
+		func(r *Row, _ time.Time) any { return r.SessionID }},
+	{"pid", 7, func(r *Row, _ time.Time) string {
+		if r.Pid == nil {
+			return "-"
+		}
+		b, _ := json.Marshal(r.Pid)
+		return string(b)
+	}, func(r *Row, _ time.Time) any { return r.Pid }},
+	{"transcript_path", 60, func(r *Row, _ time.Time) string { return strings.ReplaceAll(deref(r.TranscriptPath), home, "~") },
+		func(r *Row, _ time.Time) any { return str(r.TranscriptPath) }},
+}
+
+// tableFields are the columns of the table when --fields is not given.
+// JSON gets every field.
+var tableFields = []string{"workspace_ref", "workspace_title", "surface_ref", "surface_title", "cwd", "state", "age"}
+
+func fieldNames() []string {
+	names := make([]string, len(fields))
+	for i, f := range fields {
+		names[i] = f.name
 	}
 	return names
 }
 
-// parseColumns turns "ws_ref,state" into columns, in the given order.
-func parseColumns(s string) ([]column, error) {
-	var picked []column
+// pickFields turns "surface_ref,state" into fields, in the given order.
+func pickFields(s string) ([]field, error) {
+	var picked []field
 	for _, name := range strings.Split(s, ",") {
 		name = strings.TrimSpace(name)
-		i := slices.Index(columnNames(), strings.ToLower(name))
+		i := slices.Index(fieldNames(), strings.ToLower(name))
 		if i < 0 {
-			return nil, fmt.Errorf("invalid --columns value %q (use %s)", name, strings.Join(columnNames(), ", "))
+			return nil, fmt.Errorf("invalid --fields value %q (use %s)", name, strings.Join(fieldNames(), ", "))
 		}
-		picked = append(picked, columns[i])
+		picked = append(picked, fields[i])
 	}
 	return picked, nil
 }
 
-func printTable(w io.Writer, rows []*Row, cols []column) {
+// waitingText is the one-line table form of waiting_for.
+func waitingText(w any) string {
+	switch w := w.(type) {
+	case waitQuestions:
+		if len(w.Questions) == 0 {
+			return "question"
+		}
+		q := w.Questions[0]
+		t := q.Header
+		if t == "" {
+			t = q.Question
+		}
+		if n := len(w.Questions) - 1; n > 0 {
+			t += fmt.Sprintf(" (+%d)", n)
+		}
+		return "question: " + t
+	case waitPermission:
+		return "permission: " + strings.TrimSpace(w.Tool+" "+w.Input)
+	case waitUnknown:
+		return "unknown"
+	}
+	return "-"
+}
+
+// object is a JSON object that keeps its key order.
+type object struct {
+	keys []string
+	vals []any
+}
+
+func (o object) MarshalJSON() ([]byte, error) {
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	buf.WriteByte('{')
+	for i, k := range o.keys {
+		if i > 0 {
+			buf.WriteByte(',')
+		}
+		if err := enc.Encode(k); err != nil {
+			return nil, err
+		}
+		buf.WriteByte(':')
+		if err := enc.Encode(o.vals[i]); err != nil {
+			return nil, err
+		}
+	}
+	buf.WriteByte('}')
+	return buf.Bytes(), nil
+}
+
+func printJSON(w io.Writer, rows []*Row, cols []field) {
+	now := time.Now()
+	objs := make([]object, len(rows))
+	for i, r := range rows {
+		for _, f := range cols {
+			objs[i].keys = append(objs[i].keys, f.name)
+			objs[i].vals = append(objs[i].vals, f.value(r, now))
+		}
+	}
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	enc.SetIndent("", " ")
+	enc.Encode(objs)
+}
+
+func printTable(w io.Writer, rows []*Row, cols []field) {
 	var sb strings.Builder
 	emit := func(vals []string) {
 		parts := make([]string, len(cols))
@@ -1034,14 +1161,14 @@ func printTable(w io.Writer, rows []*Row, cols []column) {
 	}
 	names := make([]string, len(cols))
 	for i, c := range cols {
-		names[i] = c.name
+		names[i] = strings.ToUpper(c.name)
 	}
 	emit(names)
 	now := time.Now()
 	for _, r := range rows {
 		vals := make([]string, len(cols))
 		for i, c := range cols {
-			vals[i] = c.value(r, now)
+			vals[i] = c.text(r, now)
 		}
 		emit(vals)
 	}
@@ -1058,7 +1185,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	workspaceFlag := fs.String("workspace", "", "keep only this workspace (ref, UUID or index)")
 	excludeSelf := fs.Bool("exclude-self", false, "leave out the tab this command runs in")
 	sortFlag := fs.String("sort", "tree", "tree, state or age")
-	columnsFlag := fs.String("columns", "", "table columns to print (comma-separated)")
+	fieldsFlag := fs.String("fields", "", "fields to print (comma-separated)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			io.WriteString(stdout, helpText+"\n")
@@ -1097,13 +1224,13 @@ func run(args []string, stdout, stderr io.Writer) int {
 	if *sortFlag != "tree" && *sortFlag != "state" && *sortFlag != "age" {
 		return usageError(stderr, fmt.Sprintf("invalid --sort value %q (use tree, state or age)", *sortFlag))
 	}
-	cols := columns
-	if set["columns"] {
-		if *jsonMode {
-			return usageError(stderr, "--columns applies to the table only; use jq to pick JSON keys")
-		}
+	cols := fields
+	if !*jsonMode {
+		cols, _ = pickFields(strings.Join(tableFields, ","))
+	}
+	if set["fields"] {
 		var err error
-		if cols, err = parseColumns(*columnsFlag); err != nil {
+		if cols, err = pickFields(*fieldsFlag); err != nil {
 			return usageError(stderr, err.Error())
 		}
 	}
@@ -1174,12 +1301,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 // emit prints rows and returns the exit status: 0 if any row was printed,
 // 1 if there was none.
-func emit(stdout io.Writer, rows []*Row, jsonMode bool, cols []column) int {
+func emit(stdout io.Writer, rows []*Row, jsonMode bool, cols []field) int {
 	if jsonMode {
-		enc := json.NewEncoder(stdout)
-		enc.SetEscapeHTML(false)
-		enc.SetIndent("", " ")
-		enc.Encode(rows)
+		printJSON(stdout, rows, cols)
 	} else {
 		printTable(stdout, rows, cols)
 	}
