@@ -185,10 +185,10 @@ func TestSessionsUnreadable(t *testing.T) {
 }
 
 func TestFormatError(t *testing.T) {
-	const tail = "\nPlease report it at https://github.com/wada811/cmux-claude-ls/issues"
+	const tail = "\nPlease report it at https://github.com/wada811/cmux-list-claude-sessions/issues"
 	for _, c := range []struct{ ver, want string }{
-		{"0.64.22 (102) [abc]", "cmux-claude-ls: x (cmux 0.64.22 (102) [abc] ; the output format may have changed)" + tail},
-		{"", "cmux-claude-ls: x (the output format may have changed)" + tail},
+		{"0.64.22 (102) [abc]", "cmux-list-claude-sessions: x (cmux 0.64.22 (102) [abc] ; the output format may have changed)" + tail},
+		{"", "cmux-list-claude-sessions: x (the output format may have changed)" + tail},
 	} {
 		if got := formatError("x", c.ver); got != c.want {
 			t.Errorf("formatError(%q) = %q, want %q", c.ver, got, c.want)
@@ -205,7 +205,7 @@ func TestRunFlags(t *testing.T) {
 	}{
 		{"help", []string{"--help"}, 0, "Options:", ""},
 		{"-h", []string{"-h"}, 0, "Options:", ""},
-		{"version", []string{"--version"}, 0, "cmux-claude-ls ", ""},
+		{"version", []string{"--version"}, 0, "cmux-list-claude-sessions ", ""},
 		{"unknown flag", []string{"--bogus"}, 2, "", "flag provided but not defined: -bogus"},
 		{"positional", []string{"foo"}, 2, "", "unexpected argument: foo"},
 	} {
@@ -214,7 +214,7 @@ func TestRunFlags(t *testing.T) {
 		if code != c.wantCode || !strings.Contains(out.String(), c.wantOut) || !strings.Contains(errb.String(), c.err) {
 			t.Errorf("%s: code=%d out=%q err=%q", c.name, code, out.String(), errb.String())
 		}
-		if c.wantCode == 2 && !strings.Contains(errb.String(), "usage: cmux-claude-ls") {
+		if c.wantCode == 2 && !strings.Contains(errb.String(), "usage: cmux-list-claude-sessions") {
 			t.Errorf("%s: no usage on stderr: %q", c.name, errb.String())
 		}
 	}
@@ -391,8 +391,8 @@ func TestRunUsageErrors(t *testing.T) {
 	} {
 		var out, errb bytes.Buffer
 		code := run(args, &out, &errb)
-		if code != 2 || out.Len() != 0 || !strings.Contains(errb.String(), "usage: cmux-claude-ls") ||
-			!strings.Contains(errb.String(), "Run 'cmux-claude-ls --help' for details.") {
+		if code != 2 || out.Len() != 0 || !strings.Contains(errb.String(), "usage: cmux-list-claude-sessions") ||
+			!strings.Contains(errb.String(), "Run 'cmux-list-claude-sessions --help' for details.") {
 			t.Errorf("%v: code=%d out=%q err=%q", args, code, out.String(), errb.String())
 		}
 	}

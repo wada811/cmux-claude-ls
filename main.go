@@ -1,4 +1,4 @@
-// Command cmux-claude-ls lists cmux surfaces that run (or ran) Claude Code.
+// Command cmux-list-claude-sessions lists cmux surfaces that run (or ran) Claude Code.
 package main
 
 import (
@@ -39,11 +39,11 @@ func versionString() string {
 
 const tailBytes = 512 * 1024
 
-const usageLine = "usage: cmux-claude-ls [--state LIST] [--older-than DURATION] [--sort tree|state|age] [--json] [--version]"
+const usageLine = "usage: cmux-list-claude-sessions [--state LIST] [--older-than DURATION] [--sort tree|state|age] [--json] [--version]"
 
 // helpText is written for both people and LLM agents: what the tool is for,
 // what each value means and what to do next.
-const helpText = `cmux-claude-ls - find which Claude Code session in cmux needs you.
+const helpText = `cmux-list-claude-sessions - list the Claude Code sessions in cmux tabs and find which one needs you.
 
 When many Claude Code sessions run in cmux tabs, this lists every tab that
 runs (or ran) claude, across all windows and workspaces, with its state.
@@ -84,11 +84,11 @@ Columns:
                  stopped  claude has exited; the tab is still open
 
 Examples:
-  cmux-claude-ls
-  cmux-claude-ls --state waiting
-  cmux-claude-ls --state stopped --older-than 14d
-  cmux-claude-ls --sort state
-  cmux-claude-ls --json --state waiting | jq -r '.[].transcript_path'
+  cmux-list-claude-sessions
+  cmux-list-claude-sessions --state waiting
+  cmux-list-claude-sessions --state stopped --older-than 14d
+  cmux-list-claude-sessions --sort state
+  cmux-list-claude-sessions --json --state waiting | jq -r '.[].transcript_path'
   cmux read-screen --workspace workspace:2 --surface surface:9   # look at a listed tab
 
 Exit status (like grep):
@@ -99,7 +99,7 @@ Exit status (like grep):
 Tabs are matched to sessions by cmux's restore record (checkpoint_id), not by
 tty, which outlives a closed tab and can be reused by another one.`
 
-const issuesURL = "https://github.com/wada811/cmux-claude-ls/issues"
+const issuesURL = "https://github.com/wada811/cmux-list-claude-sessions/issues"
 
 var home, _ = os.UserHomeDir()
 
@@ -165,7 +165,7 @@ func formatError(what, cmuxVer string) string {
 	if cmuxVer != "" {
 		detail = "cmux " + cmuxVer + " ; " + detail
 	}
-	return fmt.Sprintf("cmux-claude-ls: %s (%s)\nPlease report it at %s", what, detail, issuesURL)
+	return fmt.Sprintf("cmux-list-claude-sessions: %s (%s)\nPlease report it at %s", what, detail, issuesURL)
 }
 
 // formatErr is an error whose message should get the cmux version and the
@@ -215,7 +215,7 @@ func parseTree(data []byte) ([]*Row, error) {
 func listSurfaces() ([]*Row, error) {
 	out, err := cmuxOutput("tree", "--all")
 	if err != nil {
-		return nil, errors.New("cmux-claude-ls: could not read `cmux tree` (is cmux running?)")
+		return nil, errors.New("cmux-list-claude-sessions: could not read `cmux tree` (is cmux running?)")
 	}
 	return parseTree(out)
 }
@@ -741,7 +741,7 @@ func printTable(w io.Writer, rows []*Row) {
 }
 
 func run(args []string, stdout, stderr io.Writer) int {
-	fs := flag.NewFlagSet("cmux-claude-ls", flag.ContinueOnError)
+	fs := flag.NewFlagSet("cmux-list-claude-sessions", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	jsonMode := fs.Bool("json", false, "print the list as JSON")
 	showVersion := fs.Bool("version", false, "print the version and exit")
@@ -759,7 +759,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return usageError(stderr, "unexpected argument: "+strings.Join(fs.Args(), " "))
 	}
 	if *showVersion {
-		fmt.Fprintf(stdout, "cmux-claude-ls %s\n", versionString())
+		fmt.Fprintf(stdout, "cmux-list-claude-sessions %s\n", versionString())
 		return 0
 	}
 
@@ -824,11 +824,11 @@ func run(args []string, stdout, stderr io.Writer) int {
 			"could not read the restore record of any of the %d terminal surface(s) from `cmux surface resume show`",
 			len(surfaces))})
 	case recordsWarn:
-		fmt.Fprintf(stderr, "cmux-claude-ls: warning: could not read the restore record of %d surface(s)\n", unreadable)
+		fmt.Fprintf(stderr, "cmux-list-claude-sessions: warning: could not read the restore record of %d surface(s)\n", unreadable)
 	}
 	live, total, readable := liveSessions()
 	if sessionsUnreadable(total, readable) {
-		fmt.Fprintf(stderr, "cmux-claude-ls: warning: could not read pid and sessionId from any of the %d file(s) in ~/.claude/sessions; STATE may be wrong (the Claude Code file format may have changed)\n", total)
+		fmt.Fprintf(stderr, "cmux-list-claude-sessions: warning: could not read pid and sessionId from any of the %d file(s) in ~/.claude/sessions; STATE may be wrong (the Claude Code file format may have changed)\n", total)
 	}
 	rows := []*Row{}
 	for i, s := range surfaces {
@@ -860,7 +860,7 @@ func emit(stdout io.Writer, rows []*Row, jsonMode bool) int {
 }
 
 func usageError(stderr io.Writer, msg string) int {
-	fmt.Fprintf(stderr, "cmux-claude-ls: %s\n%s\nRun 'cmux-claude-ls --help' for details.\n", msg, usageLine)
+	fmt.Fprintf(stderr, "cmux-list-claude-sessions: %s\n%s\nRun 'cmux-list-claude-sessions --help' for details.\n", msg, usageLine)
 	return 2
 }
 

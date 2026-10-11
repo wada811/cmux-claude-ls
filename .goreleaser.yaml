@@ -1,11 +1,11 @@
 # yaml-language-server: $schema=https://goreleaser.com/static/schema.json
 version: 2
 
-project_name: cmux-claude-ls
+project_name: cmux-list-claude-sessions
 
 builds:
   - main: .
-    binary: cmux-claude-ls
+    binary: cmux-list-claude-sessions
     env:
       - CGO_ENABLED=0
     goos:
@@ -35,8 +35,8 @@ changelog:
 
 # Homebrew: `brews` is deprecated in favor of `homebrew_casks` (since v2.10).
 homebrew_casks:
-  - name: cmux-claude-ls
-    homepage: https://github.com/wada811/cmux-claude-ls
+  - name: cmux-list-claude-sessions
+    homepage: https://github.com/wada811/cmux-list-claude-sessions
     description: Find which Claude Code session in cmux is waiting for you
     license: MIT
     repository:
@@ -49,6 +49,6 @@ homebrew_casks:
     custom_block: |
       postflight_steps do
         run "/usr/bin/xattr",
-            args:           ["-dr", "com.apple.quarantine", "{{ "{{" }}staged_path{{ "}}" }}/cmux-claude-ls"],
-            writable_paths: ["cmux-claude-ls"]
+            args:           ["-dr", "com.apple.quarantine", "{{ "{{" }}staged_path{{ "}}" }}/cmux-list-claude-sessions"],
+            writable_paths: ["cmux-list-claude-sessions"]
       end

@@ -1,11 +1,11 @@
-# cmux-claude-ls
+# cmux-list-claude-sessions
 
-Find which [Claude Code](https://claude.com/claude-code) session in [cmux](https://www.cmux.dev/) needs you.
+List the [Claude Code](https://claude.com/claude-code) sessions in [cmux](https://www.cmux.dev/) tabs and find which one needs you. Formerly cmux-claude-ls.
 
-When you run many Claude Code sessions in cmux tabs, the tab titles do not tell you which one is waiting for your answer, which one is still working, and which one finished days ago. `cmux-claude-ls` lists every tab that runs (or ran) claude, across all windows and workspaces, with its state.
+When you run many Claude Code sessions in cmux tabs, the tab titles do not tell you which one is waiting for your answer, which one is still working, and which one finished days ago. `cmux-list-claude-sessions` lists every tab that runs (or ran) claude, across all windows and workspaces, with its state.
 
 ```console
-$ cmux-claude-ls
+$ cmux-list-claude-sessions
 WS#   WORKSPACE           SURFACE#  SURFACE                           CWD                           STATE     AGE
 1     Main                1         ✳ Refactor the login flow         ~/src/app                     busy      now
 1     Main                3         Fix flaky test                    ~/src/app                     waiting   12m
@@ -23,14 +23,16 @@ It works well for LLM agents too: `--json` gives structured output, `--help` exp
 ## Install
 
 ```sh
-brew install wada811/tap/cmux-claude-ls
+brew install wada811/tap/cmux-list-claude-sessions
 ```
 
 Or with Go:
 
 ```sh
-go install github.com/wada811/cmux-claude-ls@latest
+go install github.com/wada811/cmux-list-claude-sessions@latest
 ```
+
+If you installed the old cask, `brew upgrade` follows the rename through the tap's `cask_renames.json`. To move by hand: `brew uninstall --cask cmux-claude-ls && brew install wada811/tap/cmux-list-claude-sessions`.
 
 ## Usage
 
@@ -69,7 +71,7 @@ Filters and `--sort` apply to the table and to `--json` alike.
 Prints the same list as JSON, with the session id, pid and transcript path added. A `stopped` surface has `null` for `pid`. `session_id` and `transcript_path` are named like the input that Claude Code passes to hooks.
 
 ```console
-$ cmux-claude-ls --json
+$ cmux-list-claude-sessions --json
 [
  {
   "window": "window:1",
@@ -115,20 +117,20 @@ $ cmux-claude-ls --json
 
 ```sh
 # Sessions waiting for your answer
-cmux-claude-ls --state waiting
+cmux-list-claude-sessions --state waiting
 
 # Tabs that finished and have not moved for 14 days (candidates to close)
-cmux-claude-ls --state stopped --older-than 14d
+cmux-list-claude-sessions --state stopped --older-than 14d
 
 # Everything, with the tabs that need you first
-cmux-claude-ls --sort state
+cmux-list-claude-sessions --sort state
 
 # Look at a listed tab, or read its transcript
 cmux read-screen --workspace workspace:1 --surface surface:3
-cmux-claude-ls --json | jq -r '.[] | select(.surface == "surface:3") | .transcript_path' | xargs tail -n 5
+cmux-list-claude-sessions --json | jq -r '.[] | select(.surface == "surface:3") | .transcript_path' | xargs tail -n 5
 ```
 
-`cmux-claude-ls --help` prints all of this in short form.
+`cmux-list-claude-sessions --help` prints all of this in short form.
 
 ## Exit status
 
