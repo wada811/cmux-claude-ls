@@ -67,10 +67,9 @@ Options:
   --older-than DURATION  keep only tabs whose last message is older than
                          DURATION: 30m, 12h, 14d or any Go duration (1h30m).
                          Tabs with no known last message are left out.
-  --workspace WS         keep only this workspace: workspace:3, a UUID, or a
-                         bare number, which is the 0-based position of the
-                         workspace in the sidebar (like cmux --workspace).
-                         An unknown value lists nothing and exits with 1.
+  --workspace WS         keep only this workspace; takes the same values as
+                         cmux --workspace (e.g. workspace:3). An unknown value
+                         lists nothing and exits with 1.
   --exclude-self         leave out the tab this command runs in (found through
                          cmux's CMUX_SURFACE_ID; does nothing outside cmux)
   --sort ORDER           tree   cmux sidebar order (default)
@@ -116,14 +115,16 @@ Examples:
   cmux-list-claude-sessions --sort state
   cmux-list-claude-sessions --exclude-self --sort state
   cmux-list-claude-sessions --workspace workspace:3 --state waiting
-  cmux-list-claude-sessions --json --state waiting | jq -r '.[].transcript_path'
+  cmux-list-claude-sessions --state waiting --json | jq -r '.[].transcript_path'
   cmux-list-claude-sessions --state waiting --json | jq '.[].waiting_for'
-  cmux read-screen --workspace workspace:2 --surface surface:9   # look at a listed tab
+  cmux read-screen --surface surface:9   # look at a listed tab
 
 Exit status (like grep):
   0  at least one row was printed
   1  no row to print: no Claude tab, or the filters left none ("[]" with --json)
   2  error: bad usage, or cmux or its output could not be read
+Warnings (e.g. a tab whose restore record could not be read) go to stderr and
+do not change the exit status.
 
 Tabs are matched to sessions by cmux's restore record (checkpoint_id), not by
 tty, which outlives a closed tab and can be reused by another one.`
