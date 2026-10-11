@@ -502,40 +502,33 @@ func TestExcludeSelf(t *testing.T) {
 
 func TestFilterWorkspace(t *testing.T) {
 	const uuid = "020161D6-DE4F-4BE5-B881-59C777FF6AD8"
-	mk := func(surface, window, ws string, idx int, id string) *Row {
-		return &Row{Surface: &surface, Window: &window, Workspace: &ws, wsIndex: idx, wsID: id}
+	mk := func(surface, ws, id string) *Row {
+		return &Row{Surface: &surface, Workspace: &ws, wsID: id}
 	}
 	rows := func() []*Row {
 		return []*Row{
-			mk("s1", "window:1", "workspace:1", 0, uuid),
-			mk("s2", "window:1", "workspace:5", 1, "AAAA"),
-			mk("s3", "window:1", "workspace:5", 1, "AAAA"),
-			mk("s4", "window:3", "workspace:17", 0, "BBBB"),
-			mk("s5", "window:3", "workspace:18", -1, ""),
+			mk("s1", "workspace:1", uuid),
+			mk("s2", "workspace:5", "AAAA"),
+			mk("s3", "workspace:5", "AAAA"),
+			mk("s4", "workspace:17", "BBBB"),
+			mk("s5", "workspace:18", ""),
 		}
 	}
-	for _, c := range []struct {
-		name         string
-		ws           string
-		callerWindow string
-		want         string
-	}{
-		{"ref", "workspace:5", "window:1", "s2,s3"},
-		{"ref in another window", "workspace:17", "window:1", "s4"},
-		{"uuid", uuid, "window:1", "s1"},
-		{"uuid lower case", strings.ToLower(uuid), "window:1", "s1"},
-		{"index", "1", "window:1", "s2,s3"},
-		{"index 0 in the caller's window", "0", "window:1", "s1"},
-		{"index 0 in the other window", "0", "window:3", "s4"},
-		{"index without caller window", "0", "", "s1,s4"},
-		{"ref number is not an index", "workspace:2", "window:1", ""},
-		{"unknown ref", "workspace:999", "window:1", ""},
-		{"unknown index", "99", "window:1", ""},
-		{"unknown uuid", "FFFFFFFF-0000-0000-0000-000000000000", "window:1", ""},
-		{"unknown index never matches a row without index", "-1", "", ""},
-		{"empty keeps all", "", "window:1", "s1,s2,s3,s4,s5"},
+	for _, c := range []struct{ name, ws, want string }{
+		{"ref", "workspace:5", "s2,s3"},
+		{"number is the ref number", "5", "s2,s3"},
+		{"number 1 is workspace:1, not index 1", "1", "s1"},
+		{"number in another window", "17", "s4"},
+		{"leading zero", "05", "s2,s3"},
+		{"uuid", uuid, "s1"},
+		{"uuid lower case", strings.ToLower(uuid), "s1"},
+		{"unknown ref", "workspace:999", ""},
+		{"unknown number", "99", ""},
+		{"unknown uuid", "FFFFFFFF-0000-0000-0000-000000000000", ""},
+		{"negative", "-1", ""},
+		{"empty keeps all", "", "s1,s2,s3,s4,s5"},
 	} {
-		if got := surfaces(filterWorkspace(rows(), c.ws, c.callerWindow)); got != c.want {
+		if got := surfaces(filterWorkspace(rows(), c.ws)); got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
 		}
 	}
@@ -548,7 +541,7 @@ func TestParseTreeWorkspace(t *testing.T) {
 	if err != nil || len(rows) != 2 {
 		t.Fatalf("got %d rows, %v", len(rows), err)
 	}
-	if rows[0].wsID != "AAAA" || rows[0].wsIndex != 1 || rows[1].wsID != "" || rows[1].wsIndex != -1 {
-		t.Errorf("got %q/%d and %q/%d", rows[0].wsID, rows[0].wsIndex, rows[1].wsID, rows[1].wsIndex)
+	if rows[0].wsID != "AAAA" || rows[1].wsID != "" {
+		t.Errorf("got %q and %q", rows[0].wsID, rows[1].wsID)
 	}
 }
