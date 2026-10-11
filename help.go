@@ -1,10 +1,10 @@
 package main
 
-const usageLine = "usage: cmux-list-claude-sessions [--state LIST] [--older-than DURATION] [--workspace WS] [--exclude-self] [--sort tree|state|age] [--fields LIST] [--json] [--completion SHELL] [--version]"
+const usageLine = "usage: cmux-claude-surfaces [--state LIST] [--older-than DURATION] [--workspace WS] [--exclude-self] [--sort tree|state|age] [--fields LIST] [--json] [--completion SHELL] [--version]"
 
 // helpText is written for both people and LLM agents: what the tool is for,
 // what each value means and what to do next.
-const helpText = `cmux-list-claude-sessions - list the Claude Code sessions in cmux tabs and find which one needs you.
+const helpText = `cmux-claude-surfaces - list the cmux surfaces (tabs) that run Claude Code and find which one needs you.
 
 When many Claude Code sessions run in cmux tabs, this lists every tab that
 runs (or ran) claude, across all windows and workspaces, with its state.
@@ -84,23 +84,23 @@ read.
   {"kind": "unknown"}    waiting, but no open question or tool call was found
 
 Examples:
-  cmux-list-claude-sessions
-  cmux-list-claude-sessions --state waiting
-  cmux-list-claude-sessions --state stopped --older-than 14d
-  cmux-list-claude-sessions --sort state
-  cmux-list-claude-sessions --exclude-self --sort state
-  cmux-list-claude-sessions --fields surface_ref,surface_title,state,age
-  cmux-list-claude-sessions --state waiting --fields surface_ref,waiting_for
-  cmux-list-claude-sessions --workspace workspace:3 --state waiting
-  cmux-list-claude-sessions --state waiting --json --fields surface_ref,waiting_for
-  cmux-list-claude-sessions --state waiting --json | jq -r '.[].transcript_path'
+  cmux-claude-surfaces
+  cmux-claude-surfaces --state waiting
+  cmux-claude-surfaces --state stopped --older-than 14d
+  cmux-claude-surfaces --sort state
+  cmux-claude-surfaces --exclude-self --sort state
+  cmux-claude-surfaces --fields surface_ref,surface_title,state,age
+  cmux-claude-surfaces --state waiting --fields surface_ref,waiting_for
+  cmux-claude-surfaces --workspace workspace:3 --state waiting
+  cmux-claude-surfaces --state waiting --json --fields surface_ref,waiting_for
+  cmux-claude-surfaces --state waiting --json | jq -r '.[].transcript_path'
   cmux read-screen --surface surface:9   # look at a listed tab
 
 Shell completion (zsh):
   Homebrew installs it. Otherwise put the script on your fpath, then run
   compinit, or load it in .zshrc:
-    cmux-list-claude-sessions --completion zsh > ~/.zfunc/_cmux-list-claude-sessions
-    source <(cmux-list-claude-sessions --completion zsh)
+    cmux-claude-surfaces --completion zsh > ~/.zfunc/_cmux-claude-surfaces
+    source <(cmux-claude-surfaces --completion zsh)
   It completes the flags and the values of --state, --fields, --sort and
   --completion. --state and --fields take a comma-separated list.
 

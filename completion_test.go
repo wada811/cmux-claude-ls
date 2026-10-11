@@ -57,7 +57,7 @@ func TestCompletionZshSyntax(t *testing.T) {
 		t.Skip("zsh not found")
 	}
 	script, _ := completionScript("zsh")
-	path := filepath.Join(t.TempDir(), "_cmux-list-claude-sessions")
+	path := filepath.Join(t.TempDir(), "_cmux-claude-surfaces")
 	if err := os.WriteFile(path, []byte(script), 0o644); err != nil {
 		t.Fatal(err)
 	}

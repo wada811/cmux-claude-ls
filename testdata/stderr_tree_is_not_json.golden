@@ -1,2 +1,2 @@
-cmux-list-claude-sessions: could not parse the output of `cmux tree` (cmux 9.9.9 (1) ; the output format may have changed)
-Please report it at https://github.com/wada811/cmux-list-claude-sessions/issues
+cmux-claude-surfaces: could not parse the output of `cmux tree` (cmux 9.9.9 (1) ; the output format may have changed)
+Please report it at https://github.com/wada811/cmux-claude-surfaces/issues

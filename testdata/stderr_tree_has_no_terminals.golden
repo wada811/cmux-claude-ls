@@ -1,2 +1,2 @@
-cmux-list-claude-sessions: `cmux tree` output has no terminal surface (cmux 9.9.9 (1) ; the output format may have changed)
-Please report it at https://github.com/wada811/cmux-list-claude-sessions/issues
+cmux-claude-surfaces: `cmux tree` output has no terminal surface (cmux 9.9.9 (1) ; the output format may have changed)
+Please report it at https://github.com/wada811/cmux-claude-surfaces/issues

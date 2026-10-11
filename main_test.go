@@ -15,7 +15,7 @@ func TestRunFlags(t *testing.T) {
 	}{
 		{"help", []string{"--help"}, 0, "Options:", ""},
 		{"-h", []string{"-h"}, 0, "Options:", ""},
-		{"version", []string{"--version"}, 0, "cmux-list-claude-sessions ", ""},
+		{"version", []string{"--version"}, 0, "cmux-claude-surfaces ", ""},
 		{"unknown flag", []string{"--bogus"}, 2, "", "flag provided but not defined: -bogus"},
 		{"positional", []string{"foo"}, 2, "", "unexpected argument: foo"},
 	} {
@@ -24,7 +24,7 @@ func TestRunFlags(t *testing.T) {
 		if code != c.wantCode || !strings.Contains(out.String(), c.wantOut) || !strings.Contains(errb.String(), c.err) {
 			t.Errorf("%s: code=%d out=%q err=%q", c.name, code, out.String(), errb.String())
 		}
-		if c.wantCode == 2 && !strings.Contains(errb.String(), "usage: cmux-list-claude-sessions") {
+		if c.wantCode == 2 && !strings.Contains(errb.String(), "usage: cmux-claude-surfaces") {
 			t.Errorf("%s: no usage on stderr: %q", c.name, errb.String())
 		}
 	}
@@ -44,8 +44,8 @@ func TestRunUsageErrors(t *testing.T) {
 	} {
 		var out, errb bytes.Buffer
 		code := run(args, &out, &errb)
-		if code != 2 || out.Len() != 0 || !strings.Contains(errb.String(), "usage: cmux-list-claude-sessions") ||
-			!strings.Contains(errb.String(), "Run 'cmux-list-claude-sessions --help' for details.") {
+		if code != 2 || out.Len() != 0 || !strings.Contains(errb.String(), "usage: cmux-claude-surfaces") ||
+			!strings.Contains(errb.String(), "Run 'cmux-claude-surfaces --help' for details.") {
 			t.Errorf("%v: code=%d out=%q err=%q", args, code, out.String(), errb.String())
 		}
 	}

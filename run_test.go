@@ -203,7 +203,7 @@ func TestRunWarnings(t *testing.T) {
 		if r.code != 0 {
 			t.Errorf("code = %d, want 0", r.code)
 		}
-		if want := "cmux-list-claude-sessions: warning: could not read the restore record of 1 surface(s)\n"; r.stderr != want {
+		if want := "cmux-claude-surfaces: warning: could not read the restore record of 1 surface(s)\n"; r.stderr != want {
 			t.Errorf("stderr = %q", r.stderr)
 		}
 		if strings.Contains(r.stdout, "surface:11") || !strings.Contains(r.stdout, "surface:10") {
@@ -254,7 +254,7 @@ func TestRunCmuxFailures(t *testing.T) {
 		e := defaultEnv()
 		e.treeFails = true
 		r := e.run(t)
-		if r.code != 2 || r.stderr != "cmux-list-claude-sessions: could not read `cmux tree` (is cmux running?)\n" {
+		if r.code != 2 || r.stderr != "cmux-claude-surfaces: could not read `cmux tree` (is cmux running?)\n" {
 			t.Errorf("code %d, stderr %q", r.code, r.stderr)
 		}
 	})
@@ -335,7 +335,7 @@ func TestRunFilters(t *testing.T) {
 func TestRunFieldsAndSortErrors(t *testing.T) {
 	for _, args := range [][]string{{"--fields", "nope"}, {"--sort", "nope"}, {"--state", "nope"}, {"--older-than", "x"}} {
 		r := defaultEnv().run(t, args...)
-		if r.code != 2 || r.stdout != "" || !strings.Contains(r.stderr, "Run 'cmux-list-claude-sessions --help'") {
+		if r.code != 2 || r.stdout != "" || !strings.Contains(r.stderr, "Run 'cmux-claude-surfaces --help'") {
 			t.Errorf("%v: code %d, stderr %q", args, r.code, r.stderr)
 		}
 	}

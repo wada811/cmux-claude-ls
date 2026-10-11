@@ -1,6 +1,6 @@
-#compdef cmux-list-claude-sessions
+#compdef cmux-claude-surfaces
 
-_cmux-list-claude-sessions() {
+_cmux-claude-surfaces() {
   _arguments -S \
     '--completion=[print the completion script for this shell (zsh)]:shell:(zsh)' \
     '--exclude-self[leave out the tab this command runs in]' \
@@ -14,8 +14,8 @@ _cmux-list-claude-sessions() {
     '(- *)'{-h,--help}'[print the help]'
 }
 
-if [ "$funcstack[1]" = "_cmux-list-claude-sessions" ]; then
-  _cmux-list-claude-sessions "$@"
+if [ "$funcstack[1]" = "_cmux-claude-surfaces" ]; then
+  _cmux-claude-surfaces "$@"
 else
-  compdef _cmux-list-claude-sessions cmux-list-claude-sessions
+  compdef _cmux-claude-surfaces cmux-claude-surfaces
 fi

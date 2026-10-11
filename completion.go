@@ -41,7 +41,7 @@ func completionScript(shell string) (string, error) {
 	if shell != "zsh" {
 		return "", fmt.Errorf("invalid --completion value %q (use %s)", shell, strings.Join(completionShells, ", "))
 	}
-	const name = "cmux-list-claude-sessions"
+	const name = "cmux-claude-surfaces"
 	fs, _ := newFlagSet()
 	var specs []string
 	fs.VisitAll(func(f *flag.Flag) {

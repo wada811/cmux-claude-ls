@@ -1,11 +1,11 @@
-# cmux-list-claude-sessions
+# cmux-claude-surfaces
 
-List the [Claude Code](https://claude.com/claude-code) sessions in [cmux](https://www.cmux.dev/) tabs and find which one needs you.
+List the [cmux](https://www.cmux.dev/) surfaces (tabs) that run [Claude Code](https://claude.com/claude-code) and find which one needs you.
 
-When you run many Claude Code sessions in cmux tabs, the tab titles do not tell you which one is waiting for your answer, which one is still working, and which one finished days ago. `cmux-list-claude-sessions` lists every tab that runs (or ran) claude, across all windows and workspaces, with its state.
+When you run many Claude Code sessions in cmux tabs, the tab titles do not tell you which one is waiting for your answer, which one is still working, and which one finished days ago. `cmux-claude-surfaces` lists every tab that runs (or ran) claude, across all windows and workspaces, with its state.
 
 ```console
-$ cmux-list-claude-sessions
+$ cmux-claude-surfaces
 WORKSPACE_REF  WORKSPACE_TITLE     SURFACE_REF   SURFACE_TITLE                     CWD                           STATE     AGE
 workspace:1    Main                surface:1     ✳ Refactor the login flow         ~/src/app                     busy      now
 workspace:1    Main                surface:3     Fix flaky test                    ~/src/app                     waiting   12m
@@ -23,13 +23,13 @@ It works well for LLM agents too: `--json` gives structured output, `--help` exp
 ## Install
 
 ```sh
-brew install wada811/tap/cmux-list-claude-sessions
+brew install wada811/tap/cmux-claude-surfaces
 ```
 
 Or with Go:
 
 ```sh
-go install github.com/wada811/cmux-list-claude-sessions@latest
+go install github.com/wada811/cmux-claude-surfaces@latest
 ```
 
 ### Shell completion
@@ -37,13 +37,13 @@ go install github.com/wada811/cmux-list-claude-sessions@latest
 For zsh, the Homebrew cask installs the completion script. Without Homebrew, generate it into a directory on your `fpath` (before `compinit`):
 
 ```sh
-cmux-list-claude-sessions --completion zsh > ~/.zfunc/_cmux-list-claude-sessions
+cmux-claude-surfaces --completion zsh > ~/.zfunc/_cmux-claude-surfaces
 ```
 
 or load it from `.zshrc` after `compinit`:
 
 ```sh
-source <(cmux-list-claude-sessions --completion zsh)
+source <(cmux-claude-surfaces --completion zsh)
 ```
 
 It completes the flags and the values of `--state`, `--fields`, `--sort` and `--completion`; `--state` and `--fields` take a comma-separated list.
@@ -101,7 +101,7 @@ Filters, `--sort` and `--fields` apply to the table and to `--json` alike.
 `--json` prints the same list as JSON, with every field unless `--fields` is given.
 
 ```console
-$ cmux-list-claude-sessions --json
+$ cmux-claude-surfaces --json
 [
  {
   "window_ref": "window:1",
@@ -152,33 +152,33 @@ $ cmux-list-claude-sessions --json
 
 ```sh
 # Sessions waiting for your answer
-cmux-list-claude-sessions --state waiting
+cmux-claude-surfaces --state waiting
 
 # What the waiting sessions are asking
-cmux-list-claude-sessions --state waiting --fields surface_ref,waiting_for
-cmux-list-claude-sessions --state waiting --json --fields surface_ref,waiting_for
+cmux-claude-surfaces --state waiting --fields surface_ref,waiting_for
+cmux-claude-surfaces --state waiting --json --fields surface_ref,waiting_for
 
 # Tabs that finished and have not moved for 14 days (candidates to close)
-cmux-list-claude-sessions --state stopped --older-than 14d
+cmux-claude-surfaces --state stopped --older-than 14d
 
 # Everything, with the tabs that need you first
-cmux-list-claude-sessions --sort state
+cmux-claude-surfaces --sort state
 
 # The other tabs, as seen from a session that runs inside cmux
-cmux-list-claude-sessions --exclude-self --sort state
+cmux-claude-surfaces --exclude-self --sort state
 
 # A narrow table: leave out the workspace and the working directory
-cmux-list-claude-sessions --fields surface_ref,surface_title,state,age
+cmux-claude-surfaces --fields surface_ref,surface_title,state,age
 
 # Only one workspace
-cmux-list-claude-sessions --workspace workspace:3 --state waiting
+cmux-claude-surfaces --workspace workspace:3 --state waiting
 
 # Look at a listed tab, or read its transcript
 cmux read-screen --surface surface:3
-cmux-list-claude-sessions --json | jq -r '.[] | select(.surface_ref == "surface:3") | .transcript_path' | xargs tail -n 5
+cmux-claude-surfaces --json | jq -r '.[] | select(.surface_ref == "surface:3") | .transcript_path' | xargs tail -n 5
 ```
 
-`cmux-list-claude-sessions --help` prints all of this in short form.
+`cmux-claude-surfaces --help` prints all of this in short form.
 
 ## Exit status
 
