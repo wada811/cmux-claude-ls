@@ -37,7 +37,7 @@ changelog:
 homebrew_casks:
   - name: cmux-list-claude-sessions
     homepage: https://github.com/wada811/cmux-list-claude-sessions
-    description: Find which Claude Code session in cmux is waiting for you
+    description: List Claude Code sessions in cmux tabs and find which one needs you
     license: MIT
     repository:
       owner: wada811
