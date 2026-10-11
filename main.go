@@ -4,6 +4,8 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
+	"flag"
 	"fmt"
 	"io"
 	"math"
@@ -47,6 +49,8 @@ are not shown. Surfaces are matched to sessions by the restore record's
 checkpoint_id (the tty in ` + "`cmux tree`" + ` is not used: it outlives a closed tab and
 can be reused by another one).`
 
+const issuesURL = "https://github.com/wada811/cmux-claude-ls/issues"
+
 var home, _ = os.UserHomeDir()
 
 // Row is one listed surface. Field order is the JSON key order.
@@ -65,7 +69,7 @@ type Row struct {
 }
 
 type tree struct {
-	Windows []struct {
+	Windows *[]struct {
 		Ref        *string `json:"ref"`
 		Workspaces []struct {
 			Ref   *string `json:"ref"`
@@ -89,13 +93,36 @@ type restoreRecord struct {
 	} `json:"launch_command"`
 }
 
-func cmuxJSON(v any, args ...string) bool {
-	out, err := exec.Command("cmux", append(args, "--json")...).Output()
-	if err != nil {
-		return false
-	}
-	return json.Unmarshal(out, v) == nil
+// cmuxOutput runs `cmux <args> --json` and returns its stdout.
+func cmuxOutput(args ...string) ([]byte, error) {
+	return exec.Command("cmux", append(args, "--json")...).Output()
 }
+
+// cmuxVersion returns the first line of `cmux --version` without the leading
+// "cmux ", or "" when it cannot be read.
+func cmuxVersion() string {
+	out, err := exec.Command("cmux", "--version").Output()
+	if err != nil {
+		return ""
+	}
+	line, _, _ := strings.Cut(strings.TrimSpace(string(out)), "\n")
+	return strings.TrimSpace(strings.TrimPrefix(line, "cmux "))
+}
+
+// formatError builds the message for an output format that could not be read.
+func formatError(what, cmuxVer string) string {
+	detail := "the output format may have changed"
+	if cmuxVer != "" {
+		detail = "cmux " + cmuxVer + " ; " + detail
+	}
+	return fmt.Sprintf("cmux-claude-ls: %s (%s)\nPlease report it at %s", what, detail, issuesURL)
+}
+
+// formatErr is an error whose message should get the cmux version and the
+// issue link attached.
+type formatErr struct{ what string }
+
+func (e *formatErr) Error() string { return e.what }
 
 func deref(p *string) string {
 	if p == nil {
@@ -104,14 +131,18 @@ func deref(p *string) string {
 	return *p
 }
 
-func listSurfaces() []*Row {
+// parseTree extracts the terminal surfaces from `cmux tree --all --json`.
+// It fails when the output has no `windows` key or no terminal surface.
+func parseTree(data []byte) ([]*Row, error) {
 	var t tree
-	if !cmuxJSON(&t, "tree", "--all") {
-		fmt.Fprintln(os.Stderr, "cmux-claude-ls: could not read `cmux tree` (is cmux running?)")
-		os.Exit(1)
+	if err := json.Unmarshal(data, &t); err != nil {
+		return nil, &formatErr{"could not parse the output of `cmux tree`"}
+	}
+	if t.Windows == nil {
+		return nil, &formatErr{"`cmux tree` output has no `windows`"}
 	}
 	var rows []*Row
-	for _, win := range t.Windows {
+	for _, win := range *t.Windows {
 		for _, ws := range win.Workspaces {
 			for _, pane := range ws.Panes {
 				for _, s := range pane.Surfaces {
@@ -125,22 +156,77 @@ func listSurfaces() []*Row {
 			}
 		}
 	}
-	return rows
+	if len(rows) == 0 {
+		return nil, &formatErr{"`cmux tree` output has no terminal surface"}
+	}
+	return rows, nil
 }
 
-func getRestoreRecord(row *Row) *restoreRecord {
-	var r struct {
-		RestoreRecord *restoreRecord `json:"restore_record"`
+func listSurfaces() ([]*Row, error) {
+	out, err := cmuxOutput("tree", "--all")
+	if err != nil {
+		return nil, errors.New("cmux-claude-ls: could not read `cmux tree` (is cmux running?)")
 	}
-	if !cmuxJSON(&r, "surface", "resume", "show", "--window", deref(row.Window),
-		"--workspace", deref(row.Workspace), "--surface", deref(row.Surface)) {
-		return nil
+	return parseTree(out)
+}
+
+// parseRestoreRecord interprets the output of `cmux surface resume show`.
+// readable is false when the output cannot be trusted: the command failed, the
+// JSON is broken, `restore_record` is missing, or a claude record has no
+// checkpoint_id. rec is non-nil only for a usable Claude record; a null record
+// or another kind is readable and simply not Claude.
+func parseRestoreRecord(out []byte, runErr error) (rec *restoreRecord, readable bool) {
+	if runErr != nil {
+		return nil, false
 	}
-	rec := r.RestoreRecord
-	if rec != nil && rec.Kind == "claude" && rec.CheckpointID != "" {
-		return rec
+	var top map[string]json.RawMessage
+	if json.Unmarshal(out, &top) != nil {
+		return nil, false
 	}
-	return nil
+	raw, ok := top["restore_record"]
+	if !ok {
+		return nil, false
+	}
+	if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+		return nil, true
+	}
+	var r restoreRecord
+	if json.Unmarshal(raw, &r) != nil {
+		return nil, false
+	}
+	if r.Kind != "claude" {
+		return nil, true
+	}
+	if r.CheckpointID == "" {
+		return nil, false
+	}
+	return &r, true
+}
+
+func getRestoreRecord(row *Row) (*restoreRecord, bool) {
+	out, err := cmuxOutput("surface", "resume", "show", "--window", deref(row.Window),
+		"--workspace", deref(row.Workspace), "--surface", deref(row.Surface))
+	return parseRestoreRecord(out, err)
+}
+
+type recordVerdict int
+
+const (
+	recordsOK   recordVerdict = iota
+	recordsWarn               // some could not be read
+	recordsFail               // none could be read
+)
+
+// judgeRecords decides what to do given how many of total surfaces had an
+// unreadable resume record.
+func judgeRecords(total, unreadable int) recordVerdict {
+	switch {
+	case unreadable == 0:
+		return recordsOK
+	case unreadable >= total:
+		return recordsFail
+	}
+	return recordsWarn
 }
 
 type sessionMeta struct {
@@ -148,27 +234,46 @@ type sessionMeta struct {
 	updatedAt float64
 }
 
-// liveSessions maps sessionId -> ~/.claude/sessions/<pid>.json (live processes only).
-func liveSessions() map[string]*sessionMeta {
-	bySid := map[string]*sessionMeta{}
+// parseSessionFile reads a ~/.claude/sessions/<pid>.json. ok is false unless
+// both pid and sessionId could be read.
+func parseSessionFile(data []byte) (meta map[string]any, pid int, sid string, ok bool) {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.UseNumber()
+	if dec.Decode(&meta) != nil || meta == nil {
+		return nil, 0, "", false
+	}
+	pid, pidOK := toInt(meta["pid"])
+	sid, _ = meta["sessionId"].(string)
+	if !pidOK || sid == "" {
+		return nil, 0, "", false
+	}
+	return meta, pid, sid, true
+}
+
+// sessionsUnreadable reports whether session files exist but none of them had
+// a pid and sessionId, which means the file format probably changed.
+func sessionsUnreadable(total, readable int) bool {
+	return total > 0 && readable == 0
+}
+
+// liveSessions maps sessionId -> ~/.claude/sessions/<pid>.json (live processes
+// only). total and readable count the files found and the ones whose pid and
+// sessionId could be read (a dead pid still counts as readable).
+func liveSessions() (bySid map[string]*sessionMeta, total, readable int) {
+	bySid = map[string]*sessionMeta{}
 	paths, _ := filepath.Glob(filepath.Join(home, ".claude", "sessions", "*.json"))
+	total = len(paths)
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
 		if err != nil {
 			continue
 		}
-		dec := json.NewDecoder(bytes.NewReader(data))
-		dec.UseNumber()
-		var meta map[string]any
-		if dec.Decode(&meta) != nil {
+		meta, pid, sid, ok := parseSessionFile(data)
+		if !ok {
 			continue
 		}
-		pid, ok := toInt(meta["pid"])
-		if !ok || syscall.Kill(pid, 0) != nil {
-			continue
-		}
-		sid, _ := meta["sessionId"].(string)
-		if sid == "" {
+		readable++
+		if syscall.Kill(pid, 0) != nil {
 			continue
 		}
 		var upd float64
@@ -179,7 +284,7 @@ func liveSessions() map[string]*sessionMeta {
 			bySid[sid] = &sessionMeta{raw: meta, updatedAt: upd}
 		}
 	}
-	return bySid
+	return bySid, total, readable
 }
 
 func toInt(v any) (int, bool) {
@@ -468,7 +573,7 @@ func num(ref *string) string {
 	return s
 }
 
-func printTable(rows []*Row) {
+func printTable(w io.Writer, rows []*Row) {
 	cols := []struct {
 		name string
 		w    int
@@ -493,26 +598,57 @@ func printTable(rows []*Row) {
 		emit([]string{num(r.Workspace), deref(r.WorkspaceTitle), num(r.Surface), deref(r.Title),
 			cwd, fmt.Sprint(r.State), ago(r.Updated, now)})
 	}
-	os.Stdout.WriteString(sb.String())
+	io.WriteString(w, sb.String())
 }
 
-func main() {
-	args := os.Args[1:]
-	if len(args) > 0 && (args[0] == "-h" || args[0] == "--help") {
-		fmt.Println(helpText)
-		return
+func usageText(fs *flag.FlagSet) string {
+	var buf bytes.Buffer
+	buf.WriteString(helpText)
+	buf.WriteString("\n\nOptions:\n")
+	fs.SetOutput(&buf)
+	fs.PrintDefaults()
+	fs.SetOutput(io.Discard)
+	return strings.TrimRight(buf.String(), "\n")
+}
+
+func run(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("cmux-claude-ls", flag.ContinueOnError)
+	fs.SetOutput(io.Discard)
+	jsonMode := fs.Bool("json", false, "print the list as JSON")
+	showVersion := fs.Bool("version", false, "print the version and exit")
+	if err := fs.Parse(args); err != nil {
+		if errors.Is(err, flag.ErrHelp) {
+			fmt.Fprintln(stdout, usageText(fs))
+			return 0
+		}
+		fmt.Fprintf(stderr, "cmux-claude-ls: %v\n\n%s\n", err, usageText(fs))
+		return 2
 	}
-	if len(args) > 0 && args[0] == "--version" {
-		fmt.Printf("cmux-claude-ls %s\n", versionString())
-		return
+	if fs.NArg() > 0 {
+		fmt.Fprintf(stderr, "cmux-claude-ls: unexpected argument: %s\n\n%s\n",
+			strings.Join(fs.Args(), " "), usageText(fs))
+		return 2
 	}
-	jsonMode := len(args) == 1 && args[0] == "--json"
-	if len(args) > 0 && !jsonMode {
-		fmt.Fprintf(os.Stderr, "cmux-claude-ls: unknown argument: %s\n", strings.Join(args, " "))
-		os.Exit(1)
+	if *showVersion {
+		fmt.Fprintf(stdout, "cmux-claude-ls %s\n", versionString())
+		return 0
 	}
-	surfaces := listSurfaces()
+
+	fail := func(err error) int {
+		var fe *formatErr
+		if errors.As(err, &fe) {
+			fmt.Fprintln(stderr, formatError(fe.what, cmuxVersion()))
+		} else {
+			fmt.Fprintln(stderr, err)
+		}
+		return 1
+	}
+	surfaces, err := listSurfaces()
+	if err != nil {
+		return fail(err)
+	}
 	recs := make([]*restoreRecord, len(surfaces))
+	bad := make([]bool, len(surfaces))
 	var wg sync.WaitGroup
 	sem := make(chan struct{}, 8)
 	for i, s := range surfaces {
@@ -521,11 +657,29 @@ func main() {
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }()
-			recs[i] = getRestoreRecord(s)
+			rec, ok := getRestoreRecord(s)
+			recs[i], bad[i] = rec, !ok
 		}()
 	}
 	wg.Wait()
-	live := liveSessions()
+	unreadable := 0
+	for _, b := range bad {
+		if b {
+			unreadable++
+		}
+	}
+	switch judgeRecords(len(surfaces), unreadable) {
+	case recordsFail:
+		return fail(&formatErr{fmt.Sprintf(
+			"could not read the restore record of any of the %d terminal surface(s) from `cmux surface resume show`",
+			len(surfaces))})
+	case recordsWarn:
+		fmt.Fprintf(stderr, "cmux-claude-ls: warning: could not read the restore record of %d surface(s)\n", unreadable)
+	}
+	live, total, readable := liveSessions()
+	if sessionsUnreadable(total, readable) {
+		fmt.Fprintf(stderr, "cmux-claude-ls: warning: could not read pid and sessionId from any of the %d file(s) in ~/.claude/sessions; STATE may be wrong (the Claude Code file format may have changed)\n", total)
+	}
 	rows := []*Row{}
 	for i, s := range surfaces {
 		if recs[i] != nil {
@@ -533,12 +687,17 @@ func main() {
 			rows = append(rows, s)
 		}
 	}
-	if jsonMode {
-		enc := json.NewEncoder(os.Stdout)
+	if *jsonMode {
+		enc := json.NewEncoder(stdout)
 		enc.SetEscapeHTML(false)
 		enc.SetIndent("", " ")
 		enc.Encode(rows)
 	} else {
-		printTable(rows)
+		printTable(stdout, rows)
 	}
+	return 0
+}
+
+func main() {
+	os.Exit(run(os.Args[1:], os.Stdout, os.Stderr))
 }
