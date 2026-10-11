@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime/debug"
 	"sort"
 	"strconv"
 	"strings"
@@ -19,7 +20,20 @@ import (
 	"unicode"
 )
 
+// version is set by GoReleaser via -ldflags.
 var version = "dev"
+
+// versionString falls back to the module version for `go install` builds,
+// which do not get the ldflags.
+func versionString() string {
+	if version != "dev" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return strings.TrimPrefix(info.Main.Version, "v")
+	}
+	return version
+}
 
 const tailBytes = 512 * 1024
 
@@ -489,7 +503,7 @@ func main() {
 		return
 	}
 	if len(args) > 0 && args[0] == "--version" {
-		fmt.Printf("cmux-claude-ls %s\n", version)
+		fmt.Printf("cmux-claude-ls %s\n", versionString())
 		return
 	}
 	jsonMode := len(args) == 1 && args[0] == "--json"
