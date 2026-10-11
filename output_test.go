@@ -107,7 +107,7 @@ func TestEmitExitStatus(t *testing.T) {
 func TestJSONKeys(t *testing.T) {
 	s := "x"
 	var out bytes.Buffer
-	emit(&out, []*Row{{Window: &s, Workspace: &s, WorkspaceTitle: &s, Surface: &s, SurfaceTitle: &s,
+	emit(&out, []*Row{{WindowRef: &s, WorkspaceRef: &s, WorkspaceTitle: &s, SurfaceRef: &s, SurfaceTitle: &s,
 		State: "idle", Cwd: &s, SessionID: "id", TranscriptPath: &s}}, true, fields)
 	var got []json.RawMessage
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil || len(got) != 1 {
@@ -162,7 +162,8 @@ func TestFields(t *testing.T) {
 func TestFieldForms(t *testing.T) {
 	now := time.Unix(1_000_000, 0)
 	ts := int64(1_000_000 - 3*3600)
-	r := &Row{Updated: &ts, Pid: float64(1234567)}
+	pid := 1234567
+	r := &Row{Updated: &ts, Pid: &pid}
 	get := func(name string) field { return fields[slices.Index(fieldNames(), name)] }
 	if v := get("age").value(r, now); v != int64(3*3600) {
 		t.Errorf("age value = %v", v)
@@ -177,7 +178,7 @@ func TestFieldForms(t *testing.T) {
 		t.Errorf("age without updated = %v", v)
 	}
 	for _, c := range []struct {
-		in   any
+		in   WaitingFor
 		want string
 	}{
 		{nil, "-"},

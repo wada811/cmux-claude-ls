@@ -5,6 +5,7 @@ package main
 import (
 	"fmt"
 	"math"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -17,9 +18,9 @@ import (
 // in the caller's window when cmux reported one.
 func matchWorkspace(r *Row, ws string, callerWindow string) bool {
 	if n, err := strconv.Atoi(ws); err == nil && n >= 0 {
-		return r.wsIndex == n && (callerWindow == "" || deref(r.Window) == callerWindow)
+		return r.wsIndex == n && (callerWindow == "" || deref(r.WindowRef) == callerWindow)
 	}
-	return deref(r.Workspace) == ws || (r.wsID != "" && strings.EqualFold(r.wsID, ws))
+	return deref(r.WorkspaceRef) == ws || (r.wsID != "" && strings.EqualFold(r.wsID, ws))
 }
 
 // filterWorkspace keeps the rows in the workspace ws ("" keeps all rows).
@@ -43,29 +44,34 @@ func excludeSurface(rows []*Row, ref string) []*Row {
 	}
 	out := []*Row{}
 	for _, r := range rows {
-		if deref(r.Surface) != ref {
+		if deref(r.SurfaceRef) != ref {
 			out = append(out, r)
 		}
 	}
 	return out
 }
 
-var validStates = []string{"busy", "waiting", "idle", "shell", "stopped"}
+var validStates = []State{StateBusy, StateWaiting, StateIdle, StateShell, StateStopped}
+
+// stateNames lists the values --state accepts.
+func stateNames() []string {
+	names := make([]string, len(validStates))
+	for i, s := range validStates {
+		names[i] = string(s)
+	}
+	return names
+}
 
 // parseStates parses --state: a comma-separated list of known states.
-func parseStates(s string) (map[string]bool, error) {
-	set := map[string]bool{}
+func parseStates(s string) (map[State]bool, error) {
+	set := map[State]bool{}
 	for _, v := range strings.Split(s, ",") {
-		v = strings.TrimSpace(v)
-		ok := false
-		for _, k := range validStates {
-			ok = ok || v == k
-		}
-		if !ok {
+		st := State(strings.TrimSpace(v))
+		if !slices.Contains(validStates, st) {
 			return nil, fmt.Errorf("invalid --state value %q (use a comma-separated list of %s)",
-				v, strings.Join(validStates, ", "))
+				st, strings.Join(stateNames(), ", "))
 		}
-		set[v] = true
+		set[st] = true
 	}
 	return set, nil
 }
@@ -90,10 +96,10 @@ func parseAge(s string) (time.Duration, error) {
 // filterRows keeps rows whose state is in states (nil means any) and whose
 // last message is older than olderThan (nil means any). With olderThan set,
 // rows without a last message are dropped.
-func filterRows(rows []*Row, states map[string]bool, olderThan *time.Duration, now time.Time) []*Row {
+func filterRows(rows []*Row, states map[State]bool, olderThan *time.Duration, now time.Time) []*Row {
 	out := []*Row{}
 	for _, r := range rows {
-		if states != nil && !states[fmt.Sprint(r.State)] {
+		if states != nil && !states[r.State] {
 			continue
 		}
 		if olderThan != nil {
@@ -106,7 +112,7 @@ func filterRows(rows []*Row, states map[string]bool, olderThan *time.Duration, n
 	return out
 }
 
-var stateRank = map[string]int{"waiting": 0, "idle": 1, "shell": 2, "busy": 3, "stopped": 4}
+var stateRank = map[State]int{StateWaiting: 0, StateIdle: 1, StateShell: 2, StateBusy: 3, StateStopped: 4}
 
 // sortRows reorders rows in place. "tree" keeps the given order. Ties keep
 // the tree order (stable sort).
@@ -121,7 +127,7 @@ func sortRows(rows []*Row, order string) {
 		return *a.Updated > *b.Updated
 	}
 	rank := func(r *Row) int {
-		if n, ok := stateRank[fmt.Sprint(r.State)]; ok {
+		if n, ok := stateRank[r.State]; ok {
 			return n
 		}
 		return len(stateRank) // unknown states go last

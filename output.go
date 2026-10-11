@@ -214,17 +214,17 @@ func str(p *string) any {
 
 // fields lists every field in the JSON key order.
 var fields = []field{
-	{"window_ref", 10, func(r *Row, _ time.Time) string { return deref(r.Window) },
-		func(r *Row, _ time.Time) any { return str(r.Window) }},
-	{"workspace_ref", 13, func(r *Row, _ time.Time) string { return deref(r.Workspace) },
-		func(r *Row, _ time.Time) any { return str(r.Workspace) }},
+	{"window_ref", 10, func(r *Row, _ time.Time) string { return deref(r.WindowRef) },
+		func(r *Row, _ time.Time) any { return str(r.WindowRef) }},
+	{"workspace_ref", 13, func(r *Row, _ time.Time) string { return deref(r.WorkspaceRef) },
+		func(r *Row, _ time.Time) any { return str(r.WorkspaceRef) }},
 	{"workspace_title", 18, func(r *Row, _ time.Time) string { return deref(r.WorkspaceTitle) },
 		func(r *Row, _ time.Time) any { return str(r.WorkspaceTitle) }},
-	{"surface_ref", 12, func(r *Row, _ time.Time) string { return deref(r.Surface) },
-		func(r *Row, _ time.Time) any { return str(r.Surface) }},
+	{"surface_ref", 12, func(r *Row, _ time.Time) string { return deref(r.SurfaceRef) },
+		func(r *Row, _ time.Time) any { return str(r.SurfaceRef) }},
 	{"surface_title", 32, func(r *Row, _ time.Time) string { return deref(r.SurfaceTitle) },
 		func(r *Row, _ time.Time) any { return str(r.SurfaceTitle) }},
-	{"state", 8, func(r *Row, _ time.Time) string { return fmt.Sprint(r.State) },
+	{"state", 8, func(r *Row, _ time.Time) string { return string(r.State) },
 		func(r *Row, _ time.Time) any { return r.State }},
 	{"waiting_for", 32, func(r *Row, _ time.Time) string { return waitingText(r.WaitingFor) },
 		func(r *Row, _ time.Time) any { return r.WaitingFor }},
@@ -254,9 +254,13 @@ var fields = []field{
 		if r.Pid == nil {
 			return "-"
 		}
-		b, _ := json.Marshal(r.Pid)
-		return string(b)
-	}, func(r *Row, _ time.Time) any { return r.Pid }},
+		return strconv.Itoa(*r.Pid)
+	}, func(r *Row, _ time.Time) any {
+		if r.Pid == nil {
+			return nil
+		}
+		return *r.Pid
+	}},
 	{"transcript_path", 60, func(r *Row, _ time.Time) string { return strings.ReplaceAll(deref(r.TranscriptPath), home, "~") },
 		func(r *Row, _ time.Time) any { return str(r.TranscriptPath) }},
 }

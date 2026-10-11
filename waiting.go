@@ -18,6 +18,10 @@ const waitTailBytes = 256 * 1024
 // maxInputRunes caps the one-line summary of a permission request.
 const maxInputRunes = 200
 
+// WaitingFor is what a waiting session is blocked on: waitQuestions,
+// waitPermission or waitUnknown.
+type WaitingFor interface{ isWaitingFor() }
+
 type waitQuestion struct {
 	Question    string   `json:"question"`
 	Header      string   `json:"header"`
@@ -39,6 +43,10 @@ type waitPermission struct {
 type waitUnknown struct {
 	Kind string `json:"kind"`
 }
+
+func (waitQuestions) isWaitingFor()  {}
+func (waitPermission) isWaitingFor() {}
+func (waitUnknown) isWaitingFor()    {}
 
 // summarizeInput turns a tool_use input into one short line: the command for
 // Bash, the path for file tools, the JSON otherwise.
@@ -72,7 +80,7 @@ func oneLine(s string) string {
 // parseWaitingFor finds the last tool_use in transcript lines that has no
 // tool_result after it. Lines that are not JSON (such as a cut-off first
 // line) are skipped. With no open tool_use it returns {"kind":"unknown"}.
-func parseWaitingFor(data []byte) any {
+func parseWaitingFor(data []byte) WaitingFor {
 	type block struct {
 		Type      string          `json:"type"`
 		ID        string          `json:"id"`
@@ -147,7 +155,7 @@ func parseWaitingFor(data []byte) any {
 
 // readWaitingFor reads the end of a transcript and extracts what the session
 // waits for. It returns nil when the file cannot be read.
-func readWaitingFor(path string) any {
+func readWaitingFor(path string) WaitingFor {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil
@@ -179,7 +187,7 @@ func readWaitingFor(path string) any {
 }
 
 // waitingText is the one-line table form of waiting_for.
-func waitingText(w any) string {
+func waitingText(w WaitingFor) string {
 	switch w := w.(type) {
 	case waitQuestions:
 		if len(w.Questions) == 0 {

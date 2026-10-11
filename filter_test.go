@@ -58,7 +58,7 @@ func TestParseStates(t *testing.T) {
 
 func testRows() []*Row {
 	mk := func(surface, state string, updated *int64) *Row {
-		return &Row{Surface: &surface, State: state, Updated: updated}
+		return &Row{SurfaceRef: &surface, State: State(state), Updated: updated}
 	}
 	at := func(n int64) *int64 { return &n }
 	return []*Row{
@@ -76,7 +76,7 @@ func testRows() []*Row {
 func surfaces(rows []*Row) string {
 	var s []string
 	for _, r := range rows {
-		s = append(s, *r.Surface)
+		s = append(s, *r.SurfaceRef)
 	}
 	return strings.Join(s, ",")
 }
@@ -86,16 +86,16 @@ func TestFilterRows(t *testing.T) {
 	age := func(d time.Duration) *time.Duration { return &d }
 	for _, c := range []struct {
 		name   string
-		states map[string]bool
+		states map[State]bool
 		older  *time.Duration
 		want   string
 	}{
 		{"none", nil, nil, "s1,s2,s3,s4,s5,s6,s7,s8"},
-		{"state", map[string]bool{"waiting": true, "idle": true}, nil, "s3,s4,s5,s6"},
+		{"state", map[State]bool{StateWaiting: true, StateIdle: true}, nil, "s3,s4,s5,s6"},
 		{"older drops null", nil, age(600 * time.Second), "s2,s5"},
 		{"older boundary is exclusive", nil, age(700 * time.Second), "s2"},
-		{"both", map[string]bool{"stopped": true}, age(600 * time.Second), "s2"},
-		{"no match", map[string]bool{"busy": true}, age(2000 * time.Second), ""},
+		{"both", map[State]bool{StateStopped: true}, age(600 * time.Second), "s2"},
+		{"no match", map[State]bool{StateBusy: true}, age(2000 * time.Second), ""},
 	} {
 		if got := surfaces(filterRows(testRows(), c.states, c.older, now)); got != c.want {
 			t.Errorf("%s: got %q, want %q", c.name, got, c.want)

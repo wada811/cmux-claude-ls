@@ -85,8 +85,8 @@ func (e *formatErr) Error() string { return e.what }
 // callerInfo is the surface that runs this process, as resolved by cmux.
 // Fields are empty when cmux did not report them.
 type callerInfo struct {
-	Surface string
-	Window  string
+	SurfaceRef string
+	WindowRef  string
 }
 
 // parseTree extracts the terminal surfaces from `cmux tree --all --json`, and
@@ -115,8 +115,8 @@ func parseTree(data []byte) ([]*Row, callerInfo, error) {
 							idx = *ws.Index
 						}
 						rows = append(rows, &Row{
-							Window: win.Ref, Workspace: ws.Ref, WorkspaceTitle: ws.Title,
-							Surface: s.Ref, SurfaceTitle: s.Title,
+							WindowRef: win.Ref, WorkspaceRef: ws.Ref, WorkspaceTitle: ws.Title,
+							SurfaceRef: s.Ref, SurfaceTitle: s.Title,
 							wsID: deref(ws.ID), wsIndex: idx,
 						})
 					}
@@ -138,7 +138,7 @@ func selfSurface(envSurfaceID string, caller callerInfo) string {
 	if envSurfaceID == "" {
 		return ""
 	}
-	return caller.Surface
+	return caller.SurfaceRef
 }
 
 func listSurfaces() ([]*Row, callerInfo, error) {
@@ -183,8 +183,8 @@ func parseRestoreRecord(out []byte, runErr error) (rec *restoreRecord, readable 
 }
 
 func getRestoreRecord(row *Row) (*restoreRecord, bool) {
-	out, err := cmuxOutput("surface", "resume", "show", "--window", deref(row.Window),
-		"--workspace", deref(row.Workspace), "--surface", deref(row.Surface))
+	out, err := cmuxOutput("surface", "resume", "show", "--window", deref(row.WindowRef),
+		"--workspace", deref(row.WorkspaceRef), "--surface", deref(row.SurfaceRef))
 	return parseRestoreRecord(out, err)
 }
 

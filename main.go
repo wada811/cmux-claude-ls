@@ -59,7 +59,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 0
 	}
 
-	var states map[string]bool
+	var states map[State]bool
 	var olderThan *time.Duration
 	set := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
@@ -147,7 +147,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if set["workspace"] {
-		rows = filterWorkspace(rows, strings.TrimSpace(*workspaceFlag), caller.Window)
+		rows = filterWorkspace(rows, strings.TrimSpace(*workspaceFlag), caller.WindowRef)
 	}
 	if *excludeSelf {
 		rows = excludeSurface(rows, selfSurface(os.Getenv("CMUX_SURFACE_ID"), caller))

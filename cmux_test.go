@@ -105,7 +105,7 @@ func TestParseTreeCaller(t *testing.T) {
 }
 
 func TestExcludeSelf(t *testing.T) {
-	caller := callerInfo{Surface: "s3", Window: "window:1"}
+	caller := callerInfo{SurfaceRef: "s3", WindowRef: "window:1"}
 	for _, c := range []struct {
 		name string
 		env  string
@@ -128,7 +128,7 @@ func TestExcludeSelf(t *testing.T) {
 func TestFilterWorkspace(t *testing.T) {
 	const uuid = "020161D6-DE4F-4BE5-B881-59C777FF6AD8"
 	mk := func(surface, window, ws string, idx int, id string) *Row {
-		return &Row{Surface: &surface, Window: &window, Workspace: &ws, wsIndex: idx, wsID: id}
+		return &Row{SurfaceRef: &surface, WindowRef: &window, WorkspaceRef: &ws, wsIndex: idx, wsID: id}
 	}
 	rows := func() []*Row {
 		return []*Row{

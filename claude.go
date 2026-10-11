@@ -25,6 +25,7 @@ var pidAlive = func(pid int) bool { return syscall.Kill(pid, 0) == nil }
 
 type sessionMeta struct {
 	raw       map[string]any
+	pid       int
 	updatedAt float64
 }
 
@@ -75,7 +76,7 @@ func liveSessions() (bySid map[string]*sessionMeta, total, readable int) {
 			upd, _ = n.Float64()
 		}
 		if prev, ok := bySid[sid]; !ok || upd >= prev.updatedAt {
-			bySid[sid] = &sessionMeta{raw: meta, updatedAt: upd}
+			bySid[sid] = &sessionMeta{raw: meta, pid: pid, updatedAt: upd}
 		}
 	}
 	return bySid, total, readable
@@ -161,23 +162,24 @@ func describe(row *Row, rec *restoreRecord, live map[string]*sessionMeta) {
 	}
 	var cwd *string
 	if m != nil {
-		row.State = "unknown"
-		if s, ok := m.raw["status"]; ok {
-			row.State = s
+		row.State = StateUnknown
+		if s, ok := m.raw["status"].(string); ok {
+			row.State = State(s)
 		}
-		row.Pid = m.raw["pid"]
+		pid := m.pid
+		row.Pid = &pid
 		if s, ok := m.raw["cwd"].(string); ok && s != "" {
 			cwd = &s
 		}
 	} else {
-		row.State = "stopped"
+		row.State = StateStopped
 	}
 	if cwd == nil && rec.LaunchCommand != nil && rec.LaunchCommand.WorkingDirectory != nil &&
 		*rec.LaunchCommand.WorkingDirectory != "" {
 		cwd = rec.LaunchCommand.WorkingDirectory
 	}
 	row.Cwd = cwd
-	if row.State == "waiting" && jsonl != nil {
+	if row.State == StateWaiting && jsonl != nil {
 		row.WaitingFor = readWaitingFor(*jsonl)
 	}
 }
