@@ -67,10 +67,10 @@ Options:
   --older-than DURATION  keep only tabs whose last message is older than
                          DURATION: 30m, 12h, 14d or any Go duration (1h30m).
                          Tabs with no known last message are left out.
-  --workspace WS         keep only this workspace: workspace:3, 3, or a UUID.
-                         A number is the WS# column (the N of workspace:N),
-                         not cmux's index. An unknown value lists nothing and
-                         exits with 1.
+  --workspace WS         keep only this workspace: workspace:3, a UUID, or a
+                         bare number, which is the 0-based position of the
+                         workspace in the sidebar (like cmux --workspace).
+                         An unknown value lists nothing and exits with 1.
   --exclude-self         leave out the tab this command runs in (found through
                          cmux's CMUX_SURFACE_ID; does nothing outside cmux)
   --sort ORDER           tree   cmux sidebar order (default)
@@ -147,7 +147,8 @@ type Row struct {
 	Pid            any     `json:"pid"`
 	TranscriptPath *string `json:"transcript_path"`
 
-	wsID string // workspace UUID from `cmux tree`
+	wsID    string // workspace UUID from `cmux tree`
+	wsIndex int    // workspace index in its window, -1 when unknown
 }
 
 type tree struct {
@@ -161,6 +162,7 @@ type tree struct {
 		Workspaces []struct {
 			Ref   *string `json:"ref"`
 			ID    *string `json:"id"`
+			Index *int    `json:"index"`
 			Title *string `json:"title"`
 			Panes []struct {
 				Surfaces []struct {
@@ -247,10 +249,14 @@ func parseTree(data []byte) ([]*Row, callerInfo, error) {
 			for _, pane := range ws.Panes {
 				for _, s := range pane.Surfaces {
 					if s.Type != nil && *s.Type == "terminal" {
+						idx := -1
+						if ws.Index != nil {
+							idx = *ws.Index
+						}
 						rows = append(rows, &Row{
 							Window: win.Ref, Workspace: ws.Ref, WorkspaceTitle: ws.Title,
 							Surface: s.Ref, SurfaceTitle: s.Title,
-							wsID: deref(ws.ID),
+							wsID: deref(ws.ID), wsIndex: idx,
 						})
 					}
 				}
@@ -274,24 +280,25 @@ func selfSurface(envSurfaceID string, caller callerInfo) string {
 	return caller.Surface
 }
 
-// matchWorkspace reports whether a row is in the workspace ws: a ref
-// (workspace:3), a bare number (the N of the ref, as in the WS# column) or a
-// UUID. Refs are unique across windows.
-func matchWorkspace(r *Row, ws string) bool {
+// matchWorkspace reports whether a row is in the workspace ws, given the same
+// forms as cmux --workspace: a ref (workspace:3), a UUID, or a bare number.
+// A bare number is the workspace index, counted per window, so it is looked up
+// in the caller's window when cmux reported one.
+func matchWorkspace(r *Row, ws string, callerWindow string) bool {
 	if n, err := strconv.Atoi(ws); err == nil && n >= 0 {
-		ws = "workspace:" + strconv.Itoa(n)
+		return r.wsIndex == n && (callerWindow == "" || deref(r.Window) == callerWindow)
 	}
 	return deref(r.Workspace) == ws || (r.wsID != "" && strings.EqualFold(r.wsID, ws))
 }
 
 // filterWorkspace keeps the rows in the workspace ws ("" keeps all rows).
-func filterWorkspace(rows []*Row, ws string) []*Row {
+func filterWorkspace(rows []*Row, ws string, callerWindow string) []*Row {
 	if ws == "" {
 		return rows
 	}
 	out := []*Row{}
 	for _, r := range rows {
-		if matchWorkspace(r, ws) {
+		if matchWorkspace(r, ws, callerWindow) {
 			out = append(out, r)
 		}
 	}
@@ -1106,7 +1113,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 	}
 	if set["workspace"] {
-		rows = filterWorkspace(rows, strings.TrimSpace(*workspaceFlag))
+		rows = filterWorkspace(rows, strings.TrimSpace(*workspaceFlag), caller.Window)
 	}
 	if *excludeSelf {
 		rows = excludeSurface(rows, selfSurface(os.Getenv("CMUX_SURFACE_ID"), caller))
