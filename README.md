@@ -1,6 +1,6 @@
 # cmux-list-claude-sessions
 
-List the [Claude Code](https://claude.com/claude-code) sessions in [cmux](https://www.cmux.dev/) tabs and find which one needs you. Formerly cmux-claude-ls.
+List the [Claude Code](https://claude.com/claude-code) sessions in [cmux](https://www.cmux.dev/) tabs and find which one needs you.
 
 When you run many Claude Code sessions in cmux tabs, the tab titles do not tell you which one is waiting for your answer, which one is still working, and which one finished days ago. `cmux-list-claude-sessions` lists every tab that runs (or ran) claude, across all windows and workspaces, with its state.
 
@@ -31,8 +31,6 @@ Or with Go:
 ```sh
 go install github.com/wada811/cmux-list-claude-sessions@latest
 ```
-
-If you installed the old cask, `brew upgrade` follows the rename through the tap's `cask_renames.json`. To move by hand: `brew uninstall --cask cmux-claude-ls && brew install wada811/tap/cmux-list-claude-sessions`.
 
 ## Usage
 
