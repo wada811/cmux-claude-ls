@@ -39,15 +39,47 @@ func versionString() string {
 
 const tailBytes = 512 * 1024
 
-const helpText = `List cmux surfaces that run (or ran) Claude Code.
+const usageLine = "usage: cmux-claude-ls [--json] [--version]"
 
-usage: cmux-claude-ls [--json] [--version]
+// helpText is written for both people and LLM agents: what the tool is for,
+// what each value means and what to do next.
+const helpText = `cmux-claude-ls - find which Claude Code session in cmux needs you.
 
-A surface is listed when ` + "`cmux surface resume show`" + ` has a Claude restore record
-for it. Tabs whose claude has exited are shown as "stopped"; plain shell tabs
-are not shown. Surfaces are matched to sessions by the restore record's
-checkpoint_id (the tty in ` + "`cmux tree`" + ` is not used: it outlives a closed tab and
-can be reused by another one).`
+When many Claude Code sessions run in cmux tabs, this lists every tab that
+runs (or ran) claude, across all windows and workspaces, with its state.
+Use it to:
+  - find sessions waiting for your answer        (STATE waiting)
+  - find finished tabs that can be closed        (STATE stopped, large AGE)
+  - get a tab's session id and transcript path   (--json)
+
+` + usageLine + `
+
+Options:
+  --json      print the list as JSON (keys: window, workspace, workspace_title,
+              surface, title, state, updated, cwd, session, pid, jsonl)
+  --version   print the version and exit
+  -h, --help  print this help
+
+Columns:
+  WS#, SURFACE#  cmux refs: pass them as workspace:N / surface:N to cmux
+  CWD            working directory of the session
+  AGE            time since the last message in the session
+  STATE          busy     working on a reply
+                 waiting  blocked on a question or a permission prompt
+                 idle     reply finished; at the prompt
+                 shell    reply finished; background shells or agents still run
+                 stopped  claude has exited; the tab is still open
+
+Examples:
+  cmux-claude-ls
+  cmux-claude-ls --json | jq '.[] | select(.state == "waiting")'
+  cmux-claude-ls --json | jq --argjson t "$(date -v-14d +%s)" '.[] | select(.updated < $t)'
+  cmux read-screen --workspace workspace:2 --surface surface:9   # look at a listed tab
+
+Exit status: 0 success, 1 cmux or its output could not be read, 2 bad usage.
+
+Tabs are matched to sessions by cmux's restore record (checkpoint_id), not by
+tty, which outlives a closed tab and can be reused by another one.`
 
 const issuesURL = "https://github.com/wada811/cmux-claude-ls/issues"
 
@@ -601,16 +633,6 @@ func printTable(w io.Writer, rows []*Row) {
 	io.WriteString(w, sb.String())
 }
 
-func usageText(fs *flag.FlagSet) string {
-	var buf bytes.Buffer
-	buf.WriteString(helpText)
-	buf.WriteString("\n\nOptions:\n")
-	fs.SetOutput(&buf)
-	fs.PrintDefaults()
-	fs.SetOutput(io.Discard)
-	return strings.TrimRight(buf.String(), "\n")
-}
-
 func run(args []string, stdout, stderr io.Writer) int {
 	fs := flag.NewFlagSet("cmux-claude-ls", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
@@ -618,15 +640,15 @@ func run(args []string, stdout, stderr io.Writer) int {
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
-			fmt.Fprintln(stdout, usageText(fs))
+			io.WriteString(stdout, helpText+"\n")
 			return 0
 		}
-		fmt.Fprintf(stderr, "cmux-claude-ls: %v\n\n%s\n", err, usageText(fs))
+		fmt.Fprintf(stderr, "cmux-claude-ls: %v\n%s\nRun 'cmux-claude-ls --help' for details.\n", err, usageLine)
 		return 2
 	}
 	if fs.NArg() > 0 {
-		fmt.Fprintf(stderr, "cmux-claude-ls: unexpected argument: %s\n\n%s\n",
-			strings.Join(fs.Args(), " "), usageText(fs))
+		fmt.Fprintf(stderr, "cmux-claude-ls: unexpected argument: %s\n%s\nRun 'cmux-claude-ls --help' for details.\n",
+			strings.Join(fs.Args(), " "), usageLine)
 		return 2
 	}
 	if *showVersion {

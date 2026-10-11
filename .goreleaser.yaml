@@ -37,7 +37,7 @@ changelog:
 homebrew_casks:
   - name: cmux-claude-ls
     homepage: https://github.com/wada811/cmux-claude-ls
-    description: List cmux surfaces that run Claude Code
+    description: Find which Claude Code session in cmux is waiting for you
     license: MIT
     repository:
       owner: wada811

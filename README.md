@@ -1,19 +1,24 @@
 # cmux-claude-ls
 
-List the [cmux](https://www.cmux.dev/) surfaces that run (or ran) [Claude Code](https://claude.com/claude-code), across all windows and workspaces.
+Find which [Claude Code](https://claude.com/claude-code) session in [cmux](https://www.cmux.dev/) needs you.
+
+When you run many Claude Code sessions in cmux tabs, the tab titles do not tell you which one is waiting for your answer, which one is still working, and which one finished days ago. `cmux-claude-ls` lists every tab that runs (or ran) claude, across all windows and workspaces, with its state.
 
 ```console
 $ cmux-claude-ls
 WS#   WORKSPACE           SURFACE#  SURFACE                           CWD                           STATE     AGE
 1     Main                1         ✳ Refactor the login flow         ~/src/app                     busy      now
-1     Main                3         Fix flaky test                    ~/src/app                     idle      53m
+1     Main                3         Fix flaky test                    ~/src/app                     waiting   12m
 2     Review              7         PR #123                           ~/src/app--pr-123             stopped   2d
 ```
 
-- `STATE` is the live session status (`busy`, `idle`, `waiting`, ...) or `stopped` when the claude process has exited but the tab is still open.
-- `AGE` is the time since the last message in the session.
-- `WS#` / `SURFACE#` are the numbers you pass to `cmux` commands (e.g. `cmux read-screen --surface surface:7`).
-- Plain shell tabs are not listed.
+Use it to:
+
+- **Find sessions waiting for you**: `STATE` is `waiting` while claude is blocked on a question or a permission prompt.
+- **Clean up finished tabs**: `stopped` means claude has exited but the tab is still open; `AGE` tells how long ago the session last moved.
+- **Get from a tab to its session**: `--json` gives the session id and the transcript path, and `WS#` / `SURFACE#` are what `cmux` commands take.
+
+It works well for LLM agents too: `--json` gives structured output, `--help` explains every column and state, and the exit status tells "no Claude tabs" apart from "could not read cmux".
 
 ## Install
 
@@ -29,19 +34,27 @@ go install github.com/wada811/cmux-claude-ls@latest
 
 ## Usage
 
-### `cmux-claude-ls`
+### Table
 
-Prints a table.
+| Column | Meaning |
+| --- | --- |
+| `WS#`, `SURFACE#` | cmux refs. Pass them as `workspace:N` / `surface:N` to `cmux` commands. |
+| `WORKSPACE`, `SURFACE` | Titles of the workspace and the tab. |
+| `CWD` | Working directory of the session. |
+| `STATE` | See below. |
+| `AGE` | Time since the last message in the session. |
 
-```console
-$ cmux-claude-ls
-WS#   WORKSPACE           SURFACE#  SURFACE                           CWD                           STATE     AGE
-1     Main                1         ✳ Refactor the login flow         ~/src/app                     busy      now
-1     Main                3         Fix flaky test                    ~/src/app                     idle      53m
-2     Review              7         PR #123                           ~/src/app--pr-123             stopped   2d
-```
+| `STATE` | Meaning |
+| --- | --- |
+| `busy` | Working on a reply. |
+| `waiting` | Blocked on a question or a permission prompt. Needs you. |
+| `idle` | Reply finished; at the prompt. |
+| `shell` | Reply finished; background shells or agents are still running. |
+| `stopped` | claude has exited; the tab is still open. |
 
-### `cmux-claude-ls --json`
+Plain shell tabs are not listed.
+
+### JSON
 
 Prints the same list as JSON, with the session id, pid and transcript path added. A `stopped` surface has `null` for `pid`.
 
@@ -88,35 +101,21 @@ $ cmux-claude-ls --json
 | `pid` | Process id of the live session. `null` when `state` is `stopped`. |
 | `jsonl` | Path of the session transcript. `null` if it is not found. |
 
-### `cmux-claude-ls --version`
+### Recipes
 
-```console
-$ cmux-claude-ls --version
-cmux-claude-ls 0.3.0
+```sh
+# Sessions waiting for your answer
+cmux-claude-ls --json | jq '.[] | select(.state == "waiting")'
+
+# Tabs that have not moved for 14 days (candidates to close)
+cmux-claude-ls --json | jq --argjson t "$(date -v-14d +%s)" '.[] | select(.updated < $t)'
+
+# Look at a listed tab, or read its transcript
+cmux read-screen --workspace workspace:1 --surface surface:3
+cmux-claude-ls --json | jq -r '.[] | select(.surface == "surface:3") | .jsonl' | xargs tail -n 5
 ```
 
-### `cmux-claude-ls --help`
-
-```console
-$ cmux-claude-ls --help
-List cmux surfaces that run (or ran) Claude Code.
-
-usage: cmux-claude-ls [--json] [--version]
-
-A surface is listed when `cmux surface resume show` has a Claude restore record
-for it. Tabs whose claude has exited are shown as "stopped"; plain shell tabs
-are not shown. Surfaces are matched to sessions by the restore record's
-checkpoint_id (the tty in `cmux tree` is not used: it outlives a closed tab and
-can be reused by another one).
-
-Options:
-  -json
-    	print the list as JSON
-  -version
-    	print the version and exit
-```
-
-`-h` does the same. Options can be written with one or two dashes (`-json` or `--json`).
+`cmux-claude-ls --help` prints all of this in short form.
 
 ## Exit status
 
@@ -139,7 +138,7 @@ If the output of cmux or Claude Code cannot be read any more (for example after 
 - macOS with cmux running
 - Claude Code launched inside cmux surfaces
 
-## Release
+## Release (maintainers)
 
 ```sh
 git tag vX.Y.Z && git push origin vX.Y.Z && GITHUB_TOKEN=$(gh auth token) goreleaser release --clean
