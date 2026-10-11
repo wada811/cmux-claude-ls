@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -347,7 +349,7 @@ func TestEmitExitStatus(t *testing.T) {
 		{"json empty", []*Row{}, true, 1, "[]"},
 	} {
 		var out bytes.Buffer
-		code := emit(&out, c.rows, c.json)
+		code := emit(&out, c.rows, c.json, columns)
 		if code != c.wantCode || !strings.Contains(out.String(), c.wantOut) {
 			t.Errorf("%s: code=%d out=%q", c.name, code, out.String())
 		}
@@ -358,7 +360,7 @@ func TestJSONKeys(t *testing.T) {
 	s := "x"
 	var out bytes.Buffer
 	emit(&out, []*Row{{Window: &s, Workspace: &s, WorkspaceTitle: &s, Surface: &s, SurfaceTitle: &s,
-		State: "idle", Cwd: &s, SessionID: "id", TranscriptPath: &s}}, true)
+		State: "idle", Cwd: &s, SessionID: "id", TranscriptPath: &s}}, true, columns)
 	var got []json.RawMessage
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil || len(got) != 1 {
 		t.Fatalf("bad json: %v %q", err, out.String())
@@ -550,5 +552,30 @@ func TestParseTreeWorkspace(t *testing.T) {
 	}
 	if rows[0].wsID != "AAAA" || rows[0].wsIndex != 1 || rows[1].wsID != "" || rows[1].wsIndex != -1 {
 		t.Errorf("got %q/%d and %q/%d", rows[0].wsID, rows[0].wsIndex, rows[1].wsID, rows[1].wsIndex)
+	}
+}
+
+func TestColumns(t *testing.T) {
+	cols, err := parseColumns("surface_ref, STATE,age")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	printTable(&out, testRows()[:1], cols)
+	header := strings.SplitN(out.String(), "\n", 2)[0]
+	if got := strings.Fields(header); !slices.Equal(got, []string{"SURFACE_REF", "STATE", "AGE"}) {
+		t.Errorf("header = %q", header)
+	}
+	for _, bad := range []string{"", "state,", "title"} {
+		if _, err := parseColumns(bad); err == nil {
+			t.Errorf("parseColumns(%q): want error", bad)
+		}
+	}
+	var stderr bytes.Buffer
+	if code := run([]string{"--columns", "nope"}, io.Discard, &stderr); code != 2 {
+		t.Errorf("unknown column: code=%d", code)
+	}
+	if code := run([]string{"--columns", "state", "--json"}, io.Discard, &stderr); code != 2 {
+		t.Errorf("--columns with --json: code=%d", code)
 	}
 }

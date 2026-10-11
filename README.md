@@ -54,6 +54,16 @@ go install github.com/wada811/cmux-list-claude-sessions@latest
 
 Plain shell tabs are not listed.
 
+`--columns LIST` prints only the columns you name, in that order. Use the
+column names in lowercase, comma-separated: `ws_ref`, `workspace`,
+`surface_ref`, `surface`, `cwd`, `state`, `age`. An unknown name is a usage
+error (exit 2). It applies to the table only; with `--json`, pick keys with
+`jq` instead.
+
+```sh
+cmux-list-claude-sessions --columns surface_ref,surface,state,age
+```
+
 ### Filter and sort
 
 Filters and `--sort` apply to the table and to `--json` alike.
@@ -145,6 +155,9 @@ cmux-list-claude-sessions --sort state
 
 # The other tabs, as seen from a session that runs inside cmux
 cmux-list-claude-sessions --exclude-self --sort state
+
+# A narrow table: leave out the workspace and the working directory
+cmux-list-claude-sessions --columns surface_ref,surface,state,age
 
 # Only one workspace
 cmux-list-claude-sessions --workspace workspace:3 --state waiting

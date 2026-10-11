@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -46,7 +47,7 @@ const waitTailBytes = 256 * 1024
 // maxInputRunes caps the one-line summary of a permission request.
 const maxInputRunes = 200
 
-const usageLine = "usage: cmux-list-claude-sessions [--state LIST] [--older-than DURATION] [--workspace WS] [--exclude-self] [--sort tree|state|age] [--json] [--version]"
+const usageLine = "usage: cmux-list-claude-sessions [--state LIST] [--older-than DURATION] [--workspace WS] [--exclude-self] [--sort tree|state|age] [--columns LIST] [--json] [--version]"
 
 // helpText is written for both people and LLM agents: what the tool is for,
 // what each value means and what to do next.
@@ -76,6 +77,9 @@ Options:
                          state  waiting, idle, shell, busy, stopped; newest
                                 first within a state
                          age    newest last message first
+  --columns LIST         print only these table columns, in this order,
+                         comma-separated, from ws_ref, workspace, surface_ref,
+                         surface, cwd, state, age (e.g. surface_ref,state,age)
   --json                 print the list as JSON (keys: window, workspace,
                          workspace_title, surface, surface_title, state,
                          waiting_for, updated, cwd, session_id, pid,
@@ -114,6 +118,7 @@ Examples:
   cmux-list-claude-sessions --state stopped --older-than 14d
   cmux-list-claude-sessions --sort state
   cmux-list-claude-sessions --exclude-self --sort state
+  cmux-list-claude-sessions --columns surface_ref,surface,state,age
   cmux-list-claude-sessions --workspace workspace:3 --state waiting
   cmux-list-claude-sessions --state waiting --json | jq -r '.[].transcript_path'
   cmux-list-claude-sessions --state waiting --json | jq '.[].waiting_for'
@@ -975,16 +980,54 @@ func sortRows(rows []*Row, order string) {
 	}
 }
 
-func printTable(w io.Writer, rows []*Row) {
-	cols := []struct {
-		name string
-		w    int
-	}{{"WS_REF", 13}, {"WORKSPACE", 18}, {"SURFACE_REF", 12}, {"SURFACE", 32}, {"CWD", 28}, {"STATE", 8}, {"AGE", 4}}
+// column is one column of the table: its header, its width and its value.
+type column struct {
+	name  string
+	width int
+	value func(r *Row, now time.Time) string
+}
+
+// columns lists every table column in the default order. --columns picks
+// from them by lowercase name.
+var columns = []column{
+	{"WS_REF", 13, func(r *Row, _ time.Time) string { return deref(r.Workspace) }},
+	{"WORKSPACE", 18, func(r *Row, _ time.Time) string { return deref(r.WorkspaceTitle) }},
+	{"SURFACE_REF", 12, func(r *Row, _ time.Time) string { return deref(r.Surface) }},
+	{"SURFACE", 32, func(r *Row, _ time.Time) string { return deref(r.SurfaceTitle) }},
+	{"CWD", 28, func(r *Row, _ time.Time) string { return strings.ReplaceAll(deref(r.Cwd), home, "~") }},
+	{"STATE", 8, func(r *Row, _ time.Time) string { return fmt.Sprint(r.State) }},
+	{"AGE", 4, func(r *Row, now time.Time) string { return ago(r.Updated, now) }},
+}
+
+// columnNames returns the lowercase names --columns accepts.
+func columnNames() []string {
+	names := make([]string, len(columns))
+	for i, c := range columns {
+		names[i] = strings.ToLower(c.name)
+	}
+	return names
+}
+
+// parseColumns turns "ws_ref,state" into columns, in the given order.
+func parseColumns(s string) ([]column, error) {
+	var picked []column
+	for _, name := range strings.Split(s, ",") {
+		name = strings.TrimSpace(name)
+		i := slices.Index(columnNames(), strings.ToLower(name))
+		if i < 0 {
+			return nil, fmt.Errorf("invalid --columns value %q (use %s)", name, strings.Join(columnNames(), ", "))
+		}
+		picked = append(picked, columns[i])
+	}
+	return picked, nil
+}
+
+func printTable(w io.Writer, rows []*Row, cols []column) {
 	var sb strings.Builder
 	emit := func(vals []string) {
 		parts := make([]string, len(cols))
 		for i, c := range cols {
-			parts[i] = fit(vals[i], c.w)
+			parts[i] = fit(vals[i], c.width)
 		}
 		sb.WriteString(strings.TrimRight(strings.Join(parts, "  "), " \t\n\r\v\f"))
 		sb.WriteByte('\n')
@@ -996,9 +1039,11 @@ func printTable(w io.Writer, rows []*Row) {
 	emit(names)
 	now := time.Now()
 	for _, r := range rows {
-		cwd := strings.ReplaceAll(deref(r.Cwd), home, "~")
-		emit([]string{deref(r.Workspace), deref(r.WorkspaceTitle), deref(r.Surface), deref(r.SurfaceTitle),
-			cwd, fmt.Sprint(r.State), ago(r.Updated, now)})
+		vals := make([]string, len(cols))
+		for i, c := range cols {
+			vals[i] = c.value(r, now)
+		}
+		emit(vals)
 	}
 	io.WriteString(w, sb.String())
 }
@@ -1013,6 +1058,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	workspaceFlag := fs.String("workspace", "", "keep only this workspace (ref, UUID or index)")
 	excludeSelf := fs.Bool("exclude-self", false, "leave out the tab this command runs in")
 	sortFlag := fs.String("sort", "tree", "tree, state or age")
+	columnsFlag := fs.String("columns", "", "table columns to print (comma-separated)")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			io.WriteString(stdout, helpText+"\n")
@@ -1050,6 +1096,16 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	if *sortFlag != "tree" && *sortFlag != "state" && *sortFlag != "age" {
 		return usageError(stderr, fmt.Sprintf("invalid --sort value %q (use tree, state or age)", *sortFlag))
+	}
+	cols := columns
+	if set["columns"] {
+		if *jsonMode {
+			return usageError(stderr, "--columns applies to the table only; use jq to pick JSON keys")
+		}
+		var err error
+		if cols, err = parseColumns(*columnsFlag); err != nil {
+			return usageError(stderr, err.Error())
+		}
 	}
 
 	fail := func(err error) int {
@@ -1113,19 +1169,19 @@ func run(args []string, stdout, stderr io.Writer) int {
 	}
 	rows = filterRows(rows, states, olderThan, time.Now())
 	sortRows(rows, *sortFlag)
-	return emit(stdout, rows, *jsonMode)
+	return emit(stdout, rows, *jsonMode, cols)
 }
 
 // emit prints rows and returns the exit status: 0 if any row was printed,
 // 1 if there was none.
-func emit(stdout io.Writer, rows []*Row, jsonMode bool) int {
+func emit(stdout io.Writer, rows []*Row, jsonMode bool, cols []column) int {
 	if jsonMode {
 		enc := json.NewEncoder(stdout)
 		enc.SetEscapeHTML(false)
 		enc.SetIndent("", " ")
 		enc.Encode(rows)
 	} else {
-		printTable(stdout, rows)
+		printTable(stdout, rows, cols)
 	}
 	if len(rows) == 0 {
 		return 1
