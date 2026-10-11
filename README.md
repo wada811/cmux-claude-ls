@@ -78,6 +78,7 @@ $ cmux-list-claude-sessions --json
   "surface": "surface:1",
   "surface_title": "✳ Refactor the login flow",
   "state": "busy",
+  "waiting_for": null,
   "updated": 1760000000,
   "cwd": "/Users/me/src/app",
   "session_id": "0b6f2c1e-5a43-4f0e-9a52-1d3c8e7b4a10",
@@ -91,6 +92,7 @@ $ cmux-list-claude-sessions --json
   "surface": "surface:7",
   "surface_title": "PR #123",
   "state": "stopped",
+  "waiting_for": null,
   "updated": 1759830000,
   "cwd": "/Users/me/src/app--pr-123",
   "session_id": "7d2e9a40-8b1c-4c6d-b3f5-62a1c0e94d28",
@@ -105,17 +107,33 @@ $ cmux-list-claude-sessions --json
 | `window`, `workspace`, `surface` | cmux refs. Pass them to `cmux` commands, e.g. `cmux read-screen --surface surface:7`. |
 | `workspace_title`, `surface_title` | Titles of the workspace and the surface. |
 | `state` | Live session status (`busy`, `idle`, `waiting`, ...), or `stopped` when the claude process has exited but the tab is still open. |
+| `waiting_for` | What a `waiting` session is blocked on, read from the end of its transcript. `null` for other states and when the transcript cannot be read. Not shown in the table. See below. |
 | `updated` | Time of the last message in the session, as Unix seconds. `null` if there is no transcript. |
 | `cwd` | Working directory of the session. |
 | `session_id` | Claude session id (the `checkpoint_id` of the restore record). |
 | `pid` | Process id of the live session. `null` when `state` is `stopped`. |
 | `transcript_path` | Path of the session transcript. `null` if it is not found. |
 
+`waiting_for` has one of three shapes:
+
+```json
+{"kind": "question", "questions": [{"question": "Which one?", "header": "Choice", "options": ["A", "B"], "multi_select": false}]}
+{"kind": "permission", "tool": "Bash", "input": "go test ./..."}
+{"kind": "unknown"}
+```
+
+- `question`: an `AskUserQuestion` is open. `options` holds the labels.
+- `permission`: a tool call awaits your approval. `input` is one short line: the command for `Bash`, the path for `Edit`, `Write` and `Read`, the input as JSON for other tools.
+- `unknown`: the session is waiting, but no open question or tool call was found.
+
 ### Recipes
 
 ```sh
 # Sessions waiting for your answer
 cmux-list-claude-sessions --state waiting
+
+# What the waiting sessions are asking
+cmux-list-claude-sessions --state waiting --json | jq '.[].waiting_for'
 
 # Tabs that finished and have not moved for 14 days (candidates to close)
 cmux-list-claude-sessions --state stopped --older-than 14d
@@ -143,6 +161,7 @@ cmux-list-claude-sessions --json | jq -r '.[] | select(.surface == "surface:3") 
 1. `cmux tree --all --json` lists every terminal surface.
 2. `cmux surface resume show` tells which surfaces have a Claude restore record, and its `checkpoint_id` is the Claude session id. The tty in `cmux tree` is not used: it outlives a closed tab and can be reused by another one.
 3. `~/.claude/sessions/<pid>.json` (for live processes) gives the status and cwd, and `~/.claude/projects/*/<session>.jsonl` gives the last message time.
+4. For `waiting` sessions, the last 256 KiB of the transcript gives `waiting_for`: the last `tool_use` that has no `tool_result` after it.
 
 If the output of cmux or Claude Code cannot be read any more (for example after a format change), it exits with an error instead of printing an empty table, and asks you to report it.
 
