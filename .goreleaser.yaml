@@ -45,9 +45,10 @@ homebrew_casks:
       token: "{{ .Env.GITHUB_TOKEN }}"
     directory: Casks
     # The binary is not signed or notarized; drop the quarantine attribute.
-    hooks:
-      post:
-        install: |
-          if OS.mac?
-            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/cmux-claude-ls"]
-          end
+    # Homebrew deprecated `postflight` (what `hooks` generates) for `postflight_steps`.
+    custom_block: |
+      postflight_steps do
+        run "/usr/bin/xattr",
+            args:           ["-dr", "com.apple.quarantine", "{{ "{{" }}staged_path{{ "}}" }}/cmux-claude-ls"],
+            writable_paths: ["cmux-claude-ls"]
+      end
