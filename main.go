@@ -46,7 +46,7 @@ const waitTailBytes = 256 * 1024
 // maxInputRunes caps the one-line summary of a permission request.
 const maxInputRunes = 200
 
-const usageLine = "usage: cmux-list-claude-sessions [--state LIST] [--older-than DURATION] [--sort tree|state|age] [--json] [--version]"
+const usageLine = "usage: cmux-list-claude-sessions [--state LIST] [--older-than DURATION] [--exclude-self] [--sort tree|state|age] [--json] [--version]"
 
 // helpText is written for both people and LLM agents: what the tool is for,
 // what each value means and what to do next.
@@ -67,6 +67,8 @@ Options:
   --older-than DURATION  keep only tabs whose last message is older than
                          DURATION: 30m, 12h, 14d or any Go duration (1h30m).
                          Tabs with no known last message are left out.
+  --exclude-self         leave out the tab this command runs in (found through
+                         cmux's CMUX_SURFACE_ID; does nothing outside cmux)
   --sort ORDER           tree   cmux sidebar order (default)
                          state  waiting, idle, shell, busy, stopped; newest
                                 first within a state
@@ -108,6 +110,7 @@ Examples:
   cmux-list-claude-sessions --state waiting
   cmux-list-claude-sessions --state stopped --older-than 14d
   cmux-list-claude-sessions --sort state
+  cmux-list-claude-sessions --exclude-self --sort state
   cmux-list-claude-sessions --json --state waiting | jq -r '.[].transcript_path'
   cmux-list-claude-sessions --state waiting --json | jq '.[].waiting_for'
   cmux read-screen --workspace workspace:2 --surface surface:9   # look at a listed tab
@@ -141,6 +144,11 @@ type Row struct {
 }
 
 type tree struct {
+	// Caller is the surface cmux resolved from the environment of this process.
+	Caller *struct {
+		SurfaceRef *string `json:"surface_ref"`
+		WindowRef  *string `json:"window_ref"`
+	} `json:"caller"`
 	Windows *[]struct {
 		Ref        *string `json:"ref"`
 		Workspaces []struct {
@@ -203,15 +211,27 @@ func deref(p *string) string {
 	return *p
 }
 
-// parseTree extracts the terminal surfaces from `cmux tree --all --json`.
-// It fails when the output has no `windows` key or no terminal surface.
-func parseTree(data []byte) ([]*Row, error) {
+// callerInfo is the surface that runs this process, as resolved by cmux.
+// Fields are empty when cmux did not report them.
+type callerInfo struct {
+	Surface string
+	Window  string
+}
+
+// parseTree extracts the terminal surfaces from `cmux tree --all --json`, and
+// the caller cmux reports. It fails when the output has no `windows` key or no
+// terminal surface.
+func parseTree(data []byte) ([]*Row, callerInfo, error) {
 	var t tree
+	var caller callerInfo
 	if err := json.Unmarshal(data, &t); err != nil {
-		return nil, &formatErr{"could not parse the output of `cmux tree`"}
+		return nil, caller, &formatErr{"could not parse the output of `cmux tree`"}
 	}
 	if t.Windows == nil {
-		return nil, &formatErr{"`cmux tree` output has no `windows`"}
+		return nil, caller, &formatErr{"`cmux tree` output has no `windows`"}
+	}
+	if t.Caller != nil {
+		caller = callerInfo{deref(t.Caller.SurfaceRef), deref(t.Caller.WindowRef)}
 	}
 	var rows []*Row
 	for _, win := range *t.Windows {
@@ -229,15 +249,40 @@ func parseTree(data []byte) ([]*Row, error) {
 		}
 	}
 	if len(rows) == 0 {
-		return nil, &formatErr{"`cmux tree` output has no terminal surface"}
+		return nil, caller, &formatErr{"`cmux tree` output has no terminal surface"}
 	}
-	return rows, nil
+	return rows, caller, nil
 }
 
-func listSurfaces() ([]*Row, error) {
+// selfSurface returns the ref of the surface to leave out for --exclude-self.
+// cmux reports its caller from the CMUX_SURFACE_ID of the process, which the
+// surfaces of `cmux tree` do not carry as an id. Outside cmux (envSurfaceID
+// empty) there is no self, and nothing is left out.
+func selfSurface(envSurfaceID string, caller callerInfo) string {
+	if envSurfaceID == "" {
+		return ""
+	}
+	return caller.Surface
+}
+
+// excludeSurface drops the row of the given surface ref ("" keeps all rows).
+func excludeSurface(rows []*Row, ref string) []*Row {
+	if ref == "" {
+		return rows
+	}
+	out := []*Row{}
+	for _, r := range rows {
+		if deref(r.Surface) != ref {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+func listSurfaces() ([]*Row, callerInfo, error) {
 	out, err := cmuxOutput("tree", "--all")
 	if err != nil {
-		return nil, errors.New("cmux-list-claude-sessions: could not read `cmux tree` (is cmux running?)")
+		return nil, callerInfo{}, errors.New("cmux-list-claude-sessions: could not read `cmux tree` (is cmux running?)")
 	}
 	return parseTree(out)
 }
@@ -932,6 +977,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 	showVersion := fs.Bool("version", false, "print the version and exit")
 	stateFlag := fs.String("state", "", "keep only these states (comma-separated)")
 	olderFlag := fs.String("older-than", "", "keep only tabs whose last message is older than this")
+	excludeSelf := fs.Bool("exclude-self", false, "leave out the tab this command runs in")
 	sortFlag := fs.String("sort", "tree", "tree, state or age")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
@@ -978,7 +1024,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		}
 		return 2
 	}
-	surfaces, err := listSurfaces()
+	surfaces, caller, err := listSurfaces()
 	if err != nil {
 		return fail(err)
 	}
@@ -1021,6 +1067,9 @@ func run(args []string, stdout, stderr io.Writer) int {
 			describe(s, recs[i], live)
 			rows = append(rows, s)
 		}
+	}
+	if *excludeSelf {
+		rows = excludeSurface(rows, selfSurface(os.Getenv("CMUX_SURFACE_ID"), caller))
 	}
 	rows = filterRows(rows, states, olderThan, time.Now())
 	sortRows(rows, *sortFlag)

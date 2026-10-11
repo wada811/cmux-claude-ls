@@ -97,7 +97,7 @@ func TestParseTree(t *testing.T) {
 		{"not an object", `[]`, 0, true},
 		{"empty", ``, 0, true},
 	} {
-		rows, err := parseTree([]byte(c.in))
+		rows, _, err := parseTree([]byte(c.in))
 		if (err != nil) != c.wantErr || len(rows) != c.want {
 			t.Errorf("%s: got %d rows, err=%v", c.name, len(rows), err)
 		}
@@ -456,5 +456,44 @@ func TestReadWaitingFor(t *testing.T) {
 	}
 	if got := readWaitingFor(filepath.Join(dir, "missing.jsonl")); got != nil {
 		t.Errorf("missing file: got %v, want nil", got)
+	}
+}
+
+func TestParseTreeCaller(t *testing.T) {
+	const surfaces = `"windows":[{"ref":"window:1","workspaces":[{"ref":"workspace:1","panes":[{"surfaces":[{"ref":"surface:1","type":"terminal"}]}]}]}]`
+	for _, c := range []struct {
+		name string
+		in   string
+		want callerInfo
+	}{
+		{"caller", `{"caller":{"surface_ref":"surface:9","window_ref":"window:2"},` + surfaces + `}`, callerInfo{"surface:9", "window:2"}},
+		{"no caller", `{` + surfaces + `}`, callerInfo{}},
+		{"null caller", `{"caller":null,` + surfaces + `}`, callerInfo{}},
+	} {
+		_, got, err := parseTree([]byte(c.in))
+		if err != nil || got != c.want {
+			t.Errorf("%s: got %v, %v; want %v", c.name, got, err, c.want)
+		}
+	}
+}
+
+func TestExcludeSelf(t *testing.T) {
+	caller := callerInfo{Surface: "s3", Window: "window:1"}
+	for _, c := range []struct {
+		name string
+		env  string
+		want string
+	}{
+		{"inside cmux", "C3C4B075-780E-4D9E-88AB-62B2B2FC8158", "s1,s2,s4,s5,s6,s7,s8"},
+		{"outside cmux", "", "s1,s2,s3,s4,s5,s6,s7,s8"},
+	} {
+		got := surfaces(excludeSurface(testRows(), selfSurface(c.env, caller)))
+		if got != c.want {
+			t.Errorf("%s: got %q, want %q", c.name, got, c.want)
+		}
+	}
+	// A caller that cmux did not report leaves every row.
+	if got := surfaces(excludeSurface(testRows(), selfSurface("x", callerInfo{}))); got != "s1,s2,s3,s4,s5,s6,s7,s8" {
+		t.Errorf("no caller: got %q", got)
 	}
 }
