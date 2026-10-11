@@ -1,0 +1,53 @@
+# yaml-language-server: $schema=https://goreleaser.com/static/schema.json
+version: 2
+
+project_name: cmux-claude-ls
+
+builds:
+  - main: .
+    binary: cmux-claude-ls
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X main.version={{.Version}}
+
+archives:
+  - formats: [tar.gz]
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - LICENSE
+      - README.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+
+# Homebrew: `brews` is deprecated in favor of `homebrew_casks` (since v2.10).
+homebrew_casks:
+  - name: cmux-claude-ls
+    homepage: https://github.com/wada811/cmux-claude-ls
+    description: List cmux surfaces that run Claude Code
+    license: MIT
+    repository:
+      owner: wada811
+      name: homebrew-tap
+      token: "{{ .Env.GITHUB_TOKEN }}"
+    directory: Casks
+    # The binary is not signed or notarized; drop the quarantine attribute.
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/cmux-claude-ls"]
+          end

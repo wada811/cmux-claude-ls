@@ -21,11 +21,10 @@ WS#   WORKSPACE           SURFACE#  SURFACE                           CWD       
 brew install wada811/tap/cmux-claude-ls
 ```
 
-Or copy the single script anywhere on your `PATH` (it needs only `python3` from macOS):
+Or with Go:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/wada811/cmux-claude-ls/main/cmux-claude-ls -o ~/.local/bin/cmux-claude-ls
-chmod +x ~/.local/bin/cmux-claude-ls
+go install github.com/wada811/cmux-claude-ls@latest
 ```
 
 ## Usage
@@ -44,8 +43,13 @@ cmux-claude-ls --json    # JSON, including session id, pid and transcript path
 ## Requirements
 
 - macOS with cmux running
-- Python 3.9+ (the `python3` bundled with macOS is fine)
 - Claude Code launched inside cmux surfaces
+
+## Release
+
+```sh
+git tag vX.Y.Z && git push origin vX.Y.Z && GITHUB_TOKEN=$(gh auth token) goreleaser release --clean
+```
 
 ## 日本語
 
