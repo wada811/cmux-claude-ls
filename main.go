@@ -39,7 +39,7 @@ func versionString() string {
 
 const tailBytes = 512 * 1024
 
-const usageLine = "usage: cmux-claude-ls [--json] [--version]"
+const usageLine = "usage: cmux-claude-ls [--state LIST] [--older-than DURATION] [--sort tree|state|age] [--json] [--version]"
 
 // helpText is written for both people and LLM agents: what the tool is for,
 // what each value means and what to do next.
@@ -48,17 +48,30 @@ const helpText = `cmux-claude-ls - find which Claude Code session in cmux needs 
 When many Claude Code sessions run in cmux tabs, this lists every tab that
 runs (or ran) claude, across all windows and workspaces, with its state.
 Use it to:
-  - find sessions waiting for your answer        (STATE waiting)
-  - find finished tabs that can be closed        (STATE stopped, large AGE)
+  - find sessions waiting for your answer        (--state waiting)
+  - find finished tabs that can be closed        (--state stopped --older-than 14d)
   - get a tab's session id and transcript path   (--json)
 
 ` + usageLine + `
 
 Options:
-  --json      print the list as JSON (keys: window, workspace, workspace_title,
-              surface, title, state, updated, cwd, session, pid, jsonl)
-  --version   print the version and exit
-  -h, --help  print this help
+  --state LIST           keep only these states, comma-separated, from busy,
+                         waiting, idle, shell, stopped (e.g. waiting,idle)
+  --older-than DURATION  keep only tabs whose last message is older than
+                         DURATION: 30m, 12h, 14d or any Go duration (1h30m).
+                         Tabs with no known last message are left out.
+  --sort ORDER           tree   cmux sidebar order (default)
+                         state  waiting, idle, shell, busy, stopped; newest
+                                first within a state
+                         age    newest last message first
+  --json                 print the list as JSON (keys: window, workspace,
+                         workspace_title, surface, surface_title, state,
+                         updated, cwd, session_id, pid, transcript_path)
+  --version              print the version and exit
+  -h, --help             print this help
+
+Filters and --sort apply to the table and to --json alike. The JSON keys
+session_id and transcript_path are named like the input of Claude Code hooks.
 
 Columns:
   WS#, SURFACE#  cmux refs: pass them as workspace:N / surface:N to cmux
@@ -72,11 +85,16 @@ Columns:
 
 Examples:
   cmux-claude-ls
-  cmux-claude-ls --json | jq '.[] | select(.state == "waiting")'
-  cmux-claude-ls --json | jq --argjson t "$(date -v-14d +%s)" '.[] | select(.updated < $t)'
+  cmux-claude-ls --state waiting
+  cmux-claude-ls --state stopped --older-than 14d
+  cmux-claude-ls --sort state
+  cmux-claude-ls --json --state waiting | jq -r '.[].transcript_path'
   cmux read-screen --workspace workspace:2 --surface surface:9   # look at a listed tab
 
-Exit status: 0 success, 1 cmux or its output could not be read, 2 bad usage.
+Exit status (like grep):
+  0  at least one row was printed
+  1  no row to print: no Claude tab, or the filters left none ("[]" with --json)
+  2  error: bad usage, or cmux or its output could not be read
 
 Tabs are matched to sessions by cmux's restore record (checkpoint_id), not by
 tty, which outlives a closed tab and can be reused by another one.`
@@ -91,13 +109,13 @@ type Row struct {
 	Workspace      *string `json:"workspace"`
 	WorkspaceTitle *string `json:"workspace_title"`
 	Surface        *string `json:"surface"`
-	Title          *string `json:"title"`
+	SurfaceTitle   *string `json:"surface_title"`
 	State          any     `json:"state"`
 	Updated        *int64  `json:"updated"`
 	Cwd            *string `json:"cwd"`
-	Session        string  `json:"session"`
+	SessionID      string  `json:"session_id"`
 	Pid            any     `json:"pid"`
-	Jsonl          *string `json:"jsonl"`
+	TranscriptPath *string `json:"transcript_path"`
 }
 
 type tree struct {
@@ -181,7 +199,7 @@ func parseTree(data []byte) ([]*Row, error) {
 					if s.Type != nil && *s.Type == "terminal" {
 						rows = append(rows, &Row{
 							Window: win.Ref, Workspace: ws.Ref, WorkspaceTitle: ws.Title,
-							Surface: s.Ref, Title: s.Title,
+							Surface: s.Ref, SurfaceTitle: s.Title,
 						})
 					}
 				}
@@ -391,8 +409,8 @@ func describe(row *Row, rec *restoreRecord, live map[string]*sessionMeta) {
 			jsonl, best = &p, st.ModTime()
 		}
 	}
-	row.Session = sid
-	row.Jsonl = jsonl
+	row.SessionID = sid
+	row.TranscriptPath = jsonl
 	if jsonl != nil {
 		ts := lastTimestamp(*jsonl)
 		row.Updated = &ts
@@ -605,6 +623,95 @@ func num(ref *string) string {
 	return s
 }
 
+var validStates = []string{"busy", "waiting", "idle", "shell", "stopped"}
+
+// parseStates parses --state: a comma-separated list of known states.
+func parseStates(s string) (map[string]bool, error) {
+	set := map[string]bool{}
+	for _, v := range strings.Split(s, ",") {
+		v = strings.TrimSpace(v)
+		ok := false
+		for _, k := range validStates {
+			ok = ok || v == k
+		}
+		if !ok {
+			return nil, fmt.Errorf("invalid --state value %q (use a comma-separated list of %s)",
+				v, strings.Join(validStates, ", "))
+		}
+		set[v] = true
+	}
+	return set, nil
+}
+
+// parseAge parses --older-than: a Go duration, or whole days like "14d".
+func parseAge(s string) (time.Duration, error) {
+	bad := fmt.Errorf("invalid --older-than value %q (examples: 30m, 12h, 14d)", s)
+	if n, ok := strings.CutSuffix(s, "d"); ok {
+		days, err := strconv.ParseInt(n, 10, 64)
+		if err != nil || days < 0 || days > math.MaxInt64/int64(24*time.Hour) {
+			return 0, bad
+		}
+		return time.Duration(days) * 24 * time.Hour, nil
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil || d < 0 {
+		return 0, bad
+	}
+	return d, nil
+}
+
+// filterRows keeps rows whose state is in states (nil means any) and whose
+// last message is older than olderThan (nil means any). With olderThan set,
+// rows without a last message are dropped.
+func filterRows(rows []*Row, states map[string]bool, olderThan *time.Duration, now time.Time) []*Row {
+	out := []*Row{}
+	for _, r := range rows {
+		if states != nil && !states[fmt.Sprint(r.State)] {
+			continue
+		}
+		if olderThan != nil {
+			if r.Updated == nil || now.Unix()-*r.Updated <= int64(olderThan.Seconds()) {
+				continue
+			}
+		}
+		out = append(out, r)
+	}
+	return out
+}
+
+var stateRank = map[string]int{"waiting": 0, "idle": 1, "shell": 2, "busy": 3, "stopped": 4}
+
+// sortRows reorders rows in place. "tree" keeps the given order. Ties keep
+// the tree order (stable sort).
+func sortRows(rows []*Row, order string) {
+	newer := func(a, b *Row) bool { // a is strictly newer; nil is oldest
+		switch {
+		case a.Updated == nil:
+			return false
+		case b.Updated == nil:
+			return true
+		}
+		return *a.Updated > *b.Updated
+	}
+	rank := func(r *Row) int {
+		if n, ok := stateRank[fmt.Sprint(r.State)]; ok {
+			return n
+		}
+		return len(stateRank) // unknown states go last
+	}
+	switch order {
+	case "state":
+		sort.SliceStable(rows, func(i, j int) bool {
+			if ri, rj := rank(rows[i]), rank(rows[j]); ri != rj {
+				return ri < rj
+			}
+			return newer(rows[i], rows[j])
+		})
+	case "age":
+		sort.SliceStable(rows, func(i, j int) bool { return newer(rows[i], rows[j]) })
+	}
+}
+
 func printTable(w io.Writer, rows []*Row) {
 	cols := []struct {
 		name string
@@ -627,7 +734,7 @@ func printTable(w io.Writer, rows []*Row) {
 	now := time.Now()
 	for _, r := range rows {
 		cwd := strings.ReplaceAll(deref(r.Cwd), home, "~")
-		emit([]string{num(r.Workspace), deref(r.WorkspaceTitle), num(r.Surface), deref(r.Title),
+		emit([]string{num(r.Workspace), deref(r.WorkspaceTitle), num(r.Surface), deref(r.SurfaceTitle),
 			cwd, fmt.Sprint(r.State), ago(r.Updated, now)})
 	}
 	io.WriteString(w, sb.String())
@@ -638,22 +745,43 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.SetOutput(io.Discard)
 	jsonMode := fs.Bool("json", false, "print the list as JSON")
 	showVersion := fs.Bool("version", false, "print the version and exit")
+	stateFlag := fs.String("state", "", "keep only these states (comma-separated)")
+	olderFlag := fs.String("older-than", "", "keep only tabs whose last message is older than this")
+	sortFlag := fs.String("sort", "tree", "tree, state or age")
 	if err := fs.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			io.WriteString(stdout, helpText+"\n")
 			return 0
 		}
-		fmt.Fprintf(stderr, "cmux-claude-ls: %v\n%s\nRun 'cmux-claude-ls --help' for details.\n", err, usageLine)
-		return 2
+		return usageError(stderr, err.Error())
 	}
 	if fs.NArg() > 0 {
-		fmt.Fprintf(stderr, "cmux-claude-ls: unexpected argument: %s\n%s\nRun 'cmux-claude-ls --help' for details.\n",
-			strings.Join(fs.Args(), " "), usageLine)
-		return 2
+		return usageError(stderr, "unexpected argument: "+strings.Join(fs.Args(), " "))
 	}
 	if *showVersion {
 		fmt.Fprintf(stdout, "cmux-claude-ls %s\n", versionString())
 		return 0
+	}
+
+	var states map[string]bool
+	var olderThan *time.Duration
+	set := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
+	if set["state"] {
+		var err error
+		if states, err = parseStates(*stateFlag); err != nil {
+			return usageError(stderr, err.Error())
+		}
+	}
+	if set["older-than"] {
+		d, err := parseAge(*olderFlag)
+		if err != nil {
+			return usageError(stderr, err.Error())
+		}
+		olderThan = &d
+	}
+	if *sortFlag != "tree" && *sortFlag != "state" && *sortFlag != "age" {
+		return usageError(stderr, fmt.Sprintf("invalid --sort value %q (use tree, state or age)", *sortFlag))
 	}
 
 	fail := func(err error) int {
@@ -663,7 +791,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		} else {
 			fmt.Fprintln(stderr, err)
 		}
-		return 1
+		return 2
 	}
 	surfaces, err := listSurfaces()
 	if err != nil {
@@ -709,7 +837,15 @@ func run(args []string, stdout, stderr io.Writer) int {
 			rows = append(rows, s)
 		}
 	}
-	if *jsonMode {
+	rows = filterRows(rows, states, olderThan, time.Now())
+	sortRows(rows, *sortFlag)
+	return emit(stdout, rows, *jsonMode)
+}
+
+// emit prints rows and returns the exit status: 0 if any row was printed,
+// 1 if there was none.
+func emit(stdout io.Writer, rows []*Row, jsonMode bool) int {
+	if jsonMode {
 		enc := json.NewEncoder(stdout)
 		enc.SetEscapeHTML(false)
 		enc.SetIndent("", " ")
@@ -717,7 +853,15 @@ func run(args []string, stdout, stderr io.Writer) int {
 	} else {
 		printTable(stdout, rows)
 	}
+	if len(rows) == 0 {
+		return 1
+	}
 	return 0
+}
+
+func usageError(stderr io.Writer, msg string) int {
+	fmt.Fprintf(stderr, "cmux-claude-ls: %s\n%s\nRun 'cmux-claude-ls --help' for details.\n", msg, usageLine)
+	return 2
 }
 
 func main() {
