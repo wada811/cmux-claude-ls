@@ -13,7 +13,8 @@ import (
 )
 
 // matchWorkspace reports whether a row is in the workspace ws, given the same
-// forms as cmux --workspace: a ref (workspace:3), a UUID, or a bare number.
+// forms as the --workspace flag of cmux commands: a ref (workspace:3), a UUID,
+// or a bare number.
 // A bare number is the workspace index, counted per window, so it is looked up
 // in the caller's window when cmux reported one.
 func matchWorkspace(r *Row, ws string, callerWindow string) bool {

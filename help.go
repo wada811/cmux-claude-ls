@@ -23,8 +23,8 @@ Options:
                          DURATION: 30m, 12h, 14d or any Go duration (1h30m).
                          Tabs with no known last message are left out.
   --workspace WS         keep only this workspace; takes the same values as
-                         cmux --workspace (e.g. workspace:3). An unknown value
-                         lists nothing and exits with 1.
+                         the --workspace flag of cmux commands (workspace:3).
+                         An unknown value lists nothing and exits with 1.
   --exclude-self         leave out the tab this command runs in (found through
                          cmux's CMUX_SURFACE_ID; does nothing outside cmux)
   --sort ORDER           tree   cmux sidebar order (default)
@@ -95,6 +95,7 @@ Examples:
   cmux-claude-surfaces --state waiting --json --fields surface_ref,waiting_for
   cmux-claude-surfaces --state waiting --json | jq -r '.[].transcript_path'
   cmux read-screen --surface surface:9   # look at a listed tab
+  cmux close-surface --workspace workspace:2 --surface surface:7   # close one
 
 Shell completion (zsh):
   Homebrew installs it. Otherwise put the script on your fpath, then run

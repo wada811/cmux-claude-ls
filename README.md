@@ -57,9 +57,9 @@ Each row has the fields below. Every field is a JSON key and, in upper case, a t
 | Field | Table | Meaning |
 | --- | --- | --- |
 | `window_ref` | | cmux ref of the window. |
-| `workspace_ref` | ✓ | cmux ref of the workspace. Pass it to `cmux --workspace`. |
+| `workspace_ref` | ✓ | cmux ref of the workspace. Pass it to the `--workspace` flag of cmux commands. |
 | `workspace_title` | ✓ | Title of the workspace. |
-| `surface_ref` | ✓ | cmux ref of the tab. Pass it to `cmux --surface`, e.g. `cmux read-screen --surface surface:7`. |
+| `surface_ref` | ✓ | cmux ref of the tab. Pass it to the `--surface` flag of cmux commands, e.g. `cmux read-screen --surface surface:7`. |
 | `surface_title` | ✓ | Title of the tab. |
 | `state` | ✓ | See below. |
 | `waiting_for` | | What a `waiting` session is blocked on (see [JSON](#json)). `null` for other states and when the transcript cannot be read. The table shows one line, such as `question: <header>` or `permission: Bash go test ./...`. |
@@ -90,7 +90,7 @@ Filters, `--sort` and `--fields` apply to the table and to `--json` alike.
 | --- | --- |
 | `--state LIST` | Keep only these states. Comma-separated, from `busy`, `waiting`, `idle`, `shell`, `stopped`; for example `--state waiting,idle`. |
 | `--older-than DURATION` | Keep only tabs whose last message is older than `DURATION`: `30m`, `12h`, `14d` (a whole number of days) or any [Go duration](https://pkg.go.dev/time#ParseDuration) such as `1h30m`. Tabs with no known last message are left out. |
-| `--workspace WS` | Keep only the tabs of one workspace. Takes the same values as `cmux --workspace` (e.g. `workspace:3`). A value that matches nothing lists nothing and exits with 1; it is not a usage error. |
+| `--workspace WS` | Keep only the tabs of one workspace. Takes the same values as the `--workspace` flag of cmux commands (e.g. `workspace:3`). A value that matches nothing lists nothing and exits with 1; it is not a usage error. |
 | `--exclude-self` | Leave out the tab this command runs in, so a Claude session that lists the others does not list itself. It uses the surface cmux reports for the `CMUX_SURFACE_ID` of the process. Outside cmux, where that variable is not set, it does nothing. |
 | `--sort ORDER` | `tree` (default) is the order of the cmux sidebar. `state` puts the tabs that need you first: `waiting`, `idle`, `shell`, `busy`, `stopped`, newest message first within a state. `age` is newest message first. Ties keep the `tree` order. |
 | `--completion SHELL` | Print the shell completion script and exit. Only `zsh` is supported; see [Shell completion](#shell-completion). |
@@ -176,6 +176,9 @@ cmux-claude-surfaces --workspace workspace:3 --state waiting
 # Look at a listed tab, or read its transcript
 cmux read-screen --surface surface:3
 cmux-claude-surfaces --json | jq -r '.[] | select(.surface_ref == "surface:3") | .transcript_path' | xargs tail -n 5
+
+# Close a listed tab (this tool only lists; closing is cmux's job)
+cmux close-surface --workspace workspace:2 --surface surface:7
 ```
 
 `cmux-claude-surfaces --help` prints all of this in short form.
