@@ -192,3 +192,27 @@ func TestFieldForms(t *testing.T) {
 		}
 	}
 }
+
+// Refs and pids mean nothing when cut, so their columns grow to the longest
+// value; free text such as the title and cwd is still truncated.
+func TestTableLongRefs(t *testing.T) {
+	cols, err := pickFields("window_ref,workspace_ref,workspace_title,surface_ref,pid,cwd")
+	if err != nil {
+		t.Fatal(err)
+	}
+	pid := 1234567890
+	rows := []*Row{
+		{WindowRef: sp("window:1000000001"), WorkspaceRef: sp("workspace:1000000017"), WorkspaceTitle: sp("a workspace title that is far too long to fit"), SurfaceRef: sp("surface:1000000096"), Pid: &pid, Cwd: sp("/Users/me/work/a/very/long/directory/path/that/is/cut")},
+		{WindowRef: sp("window:1"), WorkspaceRef: sp("workspace:2"), WorkspaceTitle: sp("short"), SurfaceRef: sp("surface:3"), Cwd: sp("/tmp")},
+	}
+	var out bytes.Buffer
+	printTable(&out, rows, cols)
+	golden(t, "table_long_refs", out.String())
+	for _, want := range []string{"window:1000000001", "workspace:1000000017", "surface:1000000096", "1234567890"} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("%s was cut:\n%s", want, out.String())
+		}
+	}
+}
+
+func sp(s string) *string { return &s }

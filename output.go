@@ -165,8 +165,13 @@ func isSpace(r rune) bool {
 	return unicode.IsSpace(r) || (r >= 0x1c && r <= 0x1f)
 }
 
+// oneSpaced collapses runs of white space into single spaces.
+func oneSpaced(s string) string {
+	return strings.Join(strings.FieldsFunc(s, isSpace), " ")
+}
+
 func fit(s string, w int) string {
-	s = strings.Join(strings.FieldsFunc(s, isSpace), " ")
+	s = oneSpaced(s)
 	if width(s) > w {
 		rs := []rune(s)
 		for len(rs) > 0 && width(string(rs)) > w-1 {
@@ -200,7 +205,10 @@ func ago(ts *int64, now time.Time) string {
 // same name: text is the form for people, value the form for programs.
 type field struct {
 	name  string // JSON key; the table header is its upper case
-	width int    // table column width
+	width int    // table column width; the least width when fixed
+	// fixed is for values that mean nothing when cut, such as refs and ids:
+	// the column grows to the longest value instead of truncating it.
+	fixed bool
 	text  func(r *Row, now time.Time) string
 	value func(r *Row, now time.Time) any
 }
@@ -214,21 +222,21 @@ func str(p *string) any {
 
 // fields lists every field in the JSON key order.
 var fields = []field{
-	{"window_ref", 10, func(r *Row, _ time.Time) string { return deref(r.WindowRef) },
+	{"window_ref", 10, true, func(r *Row, _ time.Time) string { return deref(r.WindowRef) },
 		func(r *Row, _ time.Time) any { return str(r.WindowRef) }},
-	{"workspace_ref", 13, func(r *Row, _ time.Time) string { return deref(r.WorkspaceRef) },
+	{"workspace_ref", 13, true, func(r *Row, _ time.Time) string { return deref(r.WorkspaceRef) },
 		func(r *Row, _ time.Time) any { return str(r.WorkspaceRef) }},
-	{"workspace_title", 18, func(r *Row, _ time.Time) string { return deref(r.WorkspaceTitle) },
+	{"workspace_title", 18, false, func(r *Row, _ time.Time) string { return deref(r.WorkspaceTitle) },
 		func(r *Row, _ time.Time) any { return str(r.WorkspaceTitle) }},
-	{"surface_ref", 12, func(r *Row, _ time.Time) string { return deref(r.SurfaceRef) },
+	{"surface_ref", 12, true, func(r *Row, _ time.Time) string { return deref(r.SurfaceRef) },
 		func(r *Row, _ time.Time) any { return str(r.SurfaceRef) }},
-	{"surface_title", 32, func(r *Row, _ time.Time) string { return deref(r.SurfaceTitle) },
+	{"surface_title", 32, false, func(r *Row, _ time.Time) string { return deref(r.SurfaceTitle) },
 		func(r *Row, _ time.Time) any { return str(r.SurfaceTitle) }},
-	{"state", 8, func(r *Row, _ time.Time) string { return string(r.State) },
+	{"state", 8, true, func(r *Row, _ time.Time) string { return string(r.State) },
 		func(r *Row, _ time.Time) any { return r.State }},
-	{"waiting_for", 32, func(r *Row, _ time.Time) string { return waitingText(r.WaitingFor) },
+	{"waiting_for", 32, false, func(r *Row, _ time.Time) string { return waitingText(r.WaitingFor) },
 		func(r *Row, _ time.Time) any { return r.WaitingFor }},
-	{"updated", 16, func(r *Row, _ time.Time) string {
+	{"updated", 16, true, func(r *Row, _ time.Time) string {
 		if r.Updated == nil {
 			return "-"
 		}
@@ -239,18 +247,18 @@ var fields = []field{
 		}
 		return *r.Updated
 	}},
-	{"age", 4, func(r *Row, now time.Time) string { return ago(r.Updated, now) },
+	{"age", 4, true, func(r *Row, now time.Time) string { return ago(r.Updated, now) },
 		func(r *Row, now time.Time) any {
 			if r.Updated == nil {
 				return nil
 			}
 			return max(now.Unix()-*r.Updated, 0)
 		}},
-	{"cwd", 28, func(r *Row, _ time.Time) string { return strings.ReplaceAll(deref(r.Cwd), home, "~") },
+	{"cwd", 28, false, func(r *Row, _ time.Time) string { return strings.ReplaceAll(deref(r.Cwd), home, "~") },
 		func(r *Row, _ time.Time) any { return str(r.Cwd) }},
-	{"session_id", 36, func(r *Row, _ time.Time) string { return r.SessionID },
+	{"session_id", 36, true, func(r *Row, _ time.Time) string { return r.SessionID },
 		func(r *Row, _ time.Time) any { return r.SessionID }},
-	{"pid", 7, func(r *Row, _ time.Time) string {
+	{"pid", 7, true, func(r *Row, _ time.Time) string {
 		if r.Pid == nil {
 			return "-"
 		}
@@ -261,7 +269,7 @@ var fields = []field{
 		}
 		return *r.Pid
 	}},
-	{"transcript_path", 60, func(r *Row, _ time.Time) string { return strings.ReplaceAll(deref(r.TranscriptPath), home, "~") },
+	{"transcript_path", 60, false, func(r *Row, _ time.Time) string { return strings.ReplaceAll(deref(r.TranscriptPath), home, "~") },
 		func(r *Row, _ time.Time) any { return str(r.TranscriptPath) }},
 }
 
@@ -334,27 +342,37 @@ func printJSON(w io.Writer, rows []*Row, cols []field) {
 }
 
 func printTable(w io.Writer, rows []*Row, cols []field) {
-	var sb strings.Builder
-	emit := func(vals []string) {
-		parts := make([]string, len(cols))
-		for i, c := range cols {
-			parts[i] = fit(vals[i], c.width)
-		}
-		sb.WriteString(strings.TrimRight(strings.Join(parts, "  "), " \t\n\r\v\f"))
-		sb.WriteByte('\n')
-	}
+	now := now()
+	cells := make([][]string, 0, len(rows)+1)
 	names := make([]string, len(cols))
 	for i, c := range cols {
 		names[i] = strings.ToUpper(c.name)
 	}
-	emit(names)
-	now := now()
+	cells = append(cells, names)
 	for _, r := range rows {
 		vals := make([]string, len(cols))
 		for i, c := range cols {
 			vals[i] = c.text(r, now)
 		}
-		emit(vals)
+		cells = append(cells, vals)
+	}
+	widths := make([]int, len(cols))
+	for i, c := range cols {
+		widths[i] = c.width
+		if c.fixed {
+			for _, vals := range cells {
+				widths[i] = max(widths[i], width(oneSpaced(vals[i])))
+			}
+		}
+	}
+	var sb strings.Builder
+	for _, vals := range cells {
+		parts := make([]string, len(cols))
+		for i := range cols {
+			parts[i] = fit(vals[i], widths[i])
+		}
+		sb.WriteString(strings.TrimRight(strings.Join(parts, "  "), " \t\n\r\v\f"))
+		sb.WriteByte('\n')
 	}
 	io.WriteString(w, sb.String())
 }

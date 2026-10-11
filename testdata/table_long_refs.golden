@@ -1,0 +1,3 @@
+WINDOW_REF         WORKSPACE_REF         WORKSPACE_TITLE     SURFACE_REF         PID         CWD
+window:1000000001  workspace:1000000017  a workspace title…  surface:1000000096  1234567890  /Users/me/work/a/very/long/…
+window:1           workspace:2           short               surface:3           -           /tmp
